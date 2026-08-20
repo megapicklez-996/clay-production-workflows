@@ -1,0 +1,23 @@
+{
+  "runId": "wfr_fixture_incomplete",
+  "status": "completed",
+  "nodes": [
+    {
+      "name": "Build and Preview Sequencer Payload",
+      "status": "completed",
+      "output": {
+        "instantly_payload_ready": false,
+        "instantly_payload_missing_fields": ["title", "linkedin_profile"],
+        "instantly_payload_preview_status": "INCOMPLETE_NO_WRITE"
+      }
+    },
+    {
+      "name": "No-Send Review and Reconciliation",
+      "status": "completed",
+      "output": {
+        "terminal_outcome": "review_only",
+        "stop_reason": "instantly_payload_incomplete:title,linkedin_profile"
+      }
+    }
+  ]
+}

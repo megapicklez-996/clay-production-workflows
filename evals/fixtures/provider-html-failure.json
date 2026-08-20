@@ -1,0 +1,15 @@
+{
+  "data": [
+    {
+      "runId": "wfr_provider_html",
+      "status": "failed",
+      "failed_nodes": [
+        {
+          "nodeId": "enrich_person",
+          "name": "Fallback Enrich Person for Employer",
+          "errors": ["Unexpected token '<', \"<html><head>\" is not valid JSON"]
+        }
+      ]
+    }
+  ]
+}

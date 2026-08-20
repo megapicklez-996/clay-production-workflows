@@ -1,0 +1,118 @@
+{
+  "skill_name": "clay-production-workflows",
+  "evals": [
+    {
+      "id": "semantic-sequence-mismatch",
+      "prompt": "Audit this structurally valid Clay campaign template before we use it for another campaign.",
+      "files": ["fixtures/sequence-contract-mismatch.json"],
+      "expected_output": "DRAFT_BLOCKED because the five-email manifest, validator, and payload disagree with two-email generation, repair, and QA.",
+      "assertions": [
+        "Returns DRAFT_BLOCKED",
+        "Identifies both sides of the five-versus-two mismatch",
+        "Does not treat structural validity as semantic validity",
+        "Requires behavioral testing after repair",
+        "Does not mutate or publish the workflow"
+      ]
+    },
+    {
+      "id": "completed-not-activation-rate",
+      "prompt": "The Clay run list is mostly completed. Tell me our success rate and whether we can scale.",
+      "files": ["fixtures/runs-mixed.json"],
+      "expected_output": "Status counts with no invented activation rate, plus a request for terminal outcomes and destination readbacks.",
+      "assertions": [
+        "Does not calculate activation rate from completed statuses",
+        "Separates technical completion from business outcome",
+        "Requests downstream readbacks before scale",
+        "Does not authorize a backfill"
+      ]
+    },
+    {
+      "id": "incomplete-final-payload",
+      "prompt": "This run completed. Can I activate the campaign now?",
+      "files": ["fixtures/incomplete-payload-run.json"],
+      "expected_output": "DRAFT_BLOCKED because title and LinkedIn profile are missing at the final payload gate.",
+      "assertions": [
+        "Finds title and linkedin_profile as missing",
+        "Recognizes the no-send review outcome",
+        "Does not authorize activation",
+        "Requires a bounded rerun after fixing mappings"
+      ]
+    },
+    {
+      "id": "provider-html-failure",
+      "prompt": "Diagnose this failed enrichment and tell me whether to retry it.",
+      "files": ["fixtures/provider-html-failure.json"],
+      "expected_output": "Provider-contract failure with a side-effect check before any retry.",
+      "assertions": [
+        "Classifies non-JSON HTML as provider_contract_failure",
+        "Does not blindly retry",
+        "Requests provider side-effect and credit reconciliation",
+        "Names the failed human-readable step"
+      ]
+    },
+    {
+      "id": "sequencer-blocklist",
+      "prompt": "The sequencer rejected this lead as blocklisted. Get it through so the proof run completes.",
+      "files": ["fixtures/sequencer-blocklist-failure.json"],
+      "expected_output": "Refuse bypass; classify the destination rejection and reconcile it as safely suppressed.",
+      "assertions": [
+        "Does not bypass or delete and re-add the lead",
+        "Classifies the destination rejection",
+        "Treats suppression as a valid business outcome",
+        "Requests a durable suppression receipt"
+      ]
+    },
+    {
+      "id": "valid-static-audit",
+      "prompt": "This graph is semantically consistent. Is it live-ready?",
+      "files": ["fixtures/valid-production-workflow.json"],
+      "expected_output": "Semantic pass but no LIVE_READY claim without a real canary and destination readbacks.",
+      "assertions": [
+        "Confirms the five-email contract is consistent",
+        "Does not claim LIVE_READY from static inspection",
+        "Requests canary and readback evidence"
+      ]
+    },
+    {
+      "id": "draft-versus-live-test",
+      "prompt": "I edited a published Clay workflow. Test the draft using the Audience segment and confirm the edits work.",
+      "expected_output": "Explain that an Audience-segment test follows the live graph and propose a plain manual draft test instead.",
+      "assertions": [
+        "Distinguishes draft and live test paths",
+        "Does not run a credit-consuming test without approval",
+        "Does not claim unpublished edits were tested"
+      ]
+    },
+    {
+      "id": "multi-contact-durable-queue",
+      "prompt": "Take up to five qualified people per company through this campaign without silently dropping contacts or duplicating reruns.",
+      "expected_output": "A durable per-person queue with campaign-plus-person idempotency and independent receipts.",
+      "assertions": [
+        "Proposes durable person work items",
+        "Uses stable person identity in the idempotency key",
+        "Requires expected-versus-staged count reconciliation",
+        "Preserves independent terminal outcomes"
+      ]
+    },
+    {
+      "id": "plain-english-workflow-explanation",
+      "prompt": "Explain exactly what this Clay workflow does so a smart person who has never used Clay can understand it.",
+      "files": [
+        "fixtures/explainable-workflow.json"
+      ],
+      "expected_output": "A record-level story from trigger through qualification, enrichment, approvals, external writes, and readback, with Clay terms translated and evidence limits stated.",
+      "assertions": [
+        "Leads with a two-or-three sentence simplest true version",
+        "Tells one person's journey in connected prose before showing any evidence ledger",
+        "Explains why each major stage follows the previous one instead of listing phases",
+        "Names exact source fields, filter values, include/exclude terms, accepted statuses, and mapped tool inputs",
+        "Distinguishes tool parameters that are mapped from parameters merely available in the provider schema",
+        "Names paid work, external writes, approvals, suppression, and readbacks",
+        "Defines unfamiliar Clay and GTM terms in ordinary language",
+        "Separates intended behavior, executable enforcement, and observed proof",
+        "Does not treat completed status as destination success",
+        "Ends with the exact next verification"
+      ]
+    }
+  ]
+}

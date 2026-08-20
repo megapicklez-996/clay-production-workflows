@@ -1,0 +1,9 @@
+{
+  "data": [
+    {"runId": "wfr_1", "status": "completed"},
+    {"runId": "wfr_2", "status": "completed"},
+    {"runId": "wfr_3", "status": "completed"},
+    {"runId": "wfr_4", "status": "failed"},
+    {"runId": "wfr_5", "status": "failed"}
+  ]
+}

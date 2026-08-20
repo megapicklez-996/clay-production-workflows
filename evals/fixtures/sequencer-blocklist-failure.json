@@ -1,0 +1,15 @@
+{
+  "data": [
+    {
+      "runId": "wfr_blocklist",
+      "status": "failed",
+      "failed_nodes": [
+        {
+          "nodeId": "add_to_campaign",
+          "name": "Add Lead to Configured Sequencer Campaign",
+          "errors": ["Tool execution failed with status: ERROR_BAD_REQUEST — Lead is in blocklist."]
+        }
+      ]
+    }
+  ]
+}

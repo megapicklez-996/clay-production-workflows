@@ -1,0 +1,5 @@
+{
+  "required_verdict": "DRAFT_BLOCKED",
+  "missing_fields": ["title", "linkedin_profile"],
+  "must_not_authorize_activation": true
+}

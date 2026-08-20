@@ -1,0 +1,67 @@
+{
+  "template": {
+    "name": "governed-clay-campaign",
+    "version": "1.0.0",
+    "source_workflow_id": "REPLACE_ME",
+    "source_snapshot_id": "REPLACE_ME"
+  },
+  "campaign": {
+    "key": "REPLACE_ME",
+    "name": "REPLACE_ME",
+    "version": "1.0",
+    "owner": "REPLACE_ME",
+    "state": "DRAFT",
+    "ready": false
+  },
+  "sources": {
+    "account_segment_id": "REPLACE_WITH_EMPTY_CONTROL_SEGMENT",
+    "person_queue_segment_id": "REPLACE_WITH_EMPTY_CONTROL_SEGMENT",
+    "entity_type": "ACCOUNT",
+    "expected_count": 0,
+    "count_observed_at": null
+  },
+  "eligibility": {
+    "account_rules": {},
+    "person_rules": {},
+    "people_per_company": 1,
+    "required_account_fields": ["domain", "company_name"],
+    "required_person_fields": ["first_name", "last_name", "title", "linkedin_url", "email"]
+  },
+  "copy_contract": {
+    "sequence_length": 1,
+    "subject_fields": ["subject1"],
+    "body_fields": ["body1"],
+    "prohibited_terms": [],
+    "required_phrases": [],
+    "allow_urls": false
+  },
+  "destinations": {
+    "audience_id": "REPLACE_ME",
+    "crm_campaign_id": "REPLACE_ME",
+    "sequencer_campaign_id": "REPLACE_ME"
+  },
+  "budgets": {
+    "expected_records": 0,
+    "worst_case_credits_per_record": 0,
+    "approved_total_clay_credits": 0,
+    "approved_byoa_cost_usd": 0
+  },
+  "approvals": {
+    "config_hash": "",
+    "reference": "",
+    "approver": "",
+    "approved_at": null,
+    "expires_at": null,
+    "paid_work": false,
+    "copy_generation": false,
+    "audience_write": false,
+    "crm_write": false,
+    "sequencer_write": false,
+    "outbound_activation": false
+  },
+  "reconciliation": {
+    "owner": "REPLACE_ME",
+    "required_readbacks": ["audience", "crm", "sequencer"],
+    "success_outcome": "activated_verified"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "valid": false,
+  "canonical_sequence_length": 5,
+  "minimum_blockers": 1,
+  "required_verdict": "DRAFT_BLOCKED"
+}

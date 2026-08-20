@@ -1,0 +1,11 @@
+{
+  "provider_html": {
+    "category": "provider_contract_failure",
+    "must_verify_side_effects_before_retry": true
+  },
+  "sequencer_blocklist": {
+    "category": "destination_rejection",
+    "must_not_bypass": true,
+    "desired_business_outcome": "safely_suppressed"
+  }
+}

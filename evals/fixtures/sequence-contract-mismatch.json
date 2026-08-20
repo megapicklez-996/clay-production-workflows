@@ -1,0 +1,59 @@
+{
+  "summary": {
+    "workflowId": "wf_fixture_mismatch",
+    "workflowName": "Structurally valid but semantically inconsistent template",
+    "workflowUrl": "https://example.invalid/wf_fixture_mismatch",
+    "nodeCount": 6,
+    "edges": [{}, {}, {}, {}, {}]
+  },
+  "nodes": [
+    {
+      "id": "manifest",
+      "name": "Campaign Configuration + Fail-Closed Preflight",
+      "nodeType": "code",
+      "code": "config = {'sequence_length': 5, 'campaign_state': 'DRAFT'}"
+    },
+    {
+      "id": "generate",
+      "name": "Generate Configured Five-Email Sequence",
+      "nodeType": "agent",
+      "agentPrompt": "Write a privacy-safe two-email sequence. Return subject1, body1, subject2, body2 only.",
+      "outputSchema": {
+        "subject1": {"type": "string"}, "body1": {"type": "string"},
+        "subject2": {"type": "string"}, "body2": {"type": "string"}
+      }
+    },
+    {
+      "id": "repair",
+      "name": "Repair Configured Five-Email Sequence",
+      "nodeType": "agent",
+      "agentPrompt": "Repair the two-email sequence once.",
+      "outputSchema": {
+        "subject1": {"type": "string"}, "body1": {"type": "string"},
+        "subject2": {"type": "string"}, "body2": {"type": "string"}
+      }
+    },
+    {
+      "id": "validator",
+      "name": "Deterministic Copy Contract Validator",
+      "nodeType": "code",
+      "code": "assert contract['sequence_length'] == 5\nfor i in range(1, 6): check(subject, body)"
+    },
+    {
+      "id": "qa",
+      "name": "Review Configured Sequence",
+      "nodeType": "agent",
+      "agentPrompt": "Review the two-email sequence.",
+      "inputSchema": {
+        "subject1": {"type": "string"}, "body1": {"type": "string"},
+        "subject2": {"type": "string"}, "body2": {"type": "string"}
+      }
+    },
+    {
+      "id": "payload",
+      "name": "Build and Preview Custom Variables for 5 Emails",
+      "nodeType": "code",
+      "code": "required = [subject_1, body_1, subject_2, body_2, subject_3, body_3, subject_4, body_4, subject_5, body_5]"
+    }
+  ]
+}

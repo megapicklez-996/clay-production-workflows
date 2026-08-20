@@ -1,0 +1,92 @@
+{
+  "summary": {
+    "workflowId": "wf_fixture_explainer",
+    "workflowName": "Governed Contact Campaign",
+    "workflowUrl": "https://example.invalid/wf_fixture_explainer",
+    "nodeCount": 14,
+    "edges": [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}]
+  },
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Person Queue — One Run Per Selected Contact",
+      "nodeType": "trigger",
+      "description": "Starts a separate run for each staged person."
+    },
+    {
+      "id": "preflight",
+      "name": "P00 Campaign Configuration + Fail-Closed Preflight",
+      "nodeType": "code",
+      "description": "Blocks paid work and external writes when campaign approval is absent.",
+      "code": "config = {'campaign_state': 'DRAFT', 'account_employee_min': 250, 'account_employee_max': 5000, 'account_countries': ['united states', 'united kingdom', 'canada'], 'account_industry_terms': ['saas', 'software', 'fintech'], 'account_readiness_field': 'Campaign Launch Ready', 'account_qualification_field': 'Qualified Company', 'account_customer_fields': ['Active Customer'], 'account_open_opportunity_field': '# Open Oppty', 'people_per_company': 1, 'target_locations': ['United States', 'United Kingdom', 'Canada'], 'target_title_include_terms': ['marketing operations', 'revenue operations', 'gtm engineer'], 'target_title_exclude_terms': ['sales operations', 'sdr', 'cmo'], 'target_seniority_floor': 'manager', 'persona_rules': [{'persona': 'Marketing Operations', 'terms': ['marketing operations'], 'role_angle': 'example'}], 'campaign_copy_contract': {'sequence_length': 5, 'subject_min_words': 2, 'subject_max_words': 6, 'body_word_targets': [72, 55, 33, 35, 48], 'body_word_tolerance_pct': 10, 'greeting_email_numbers': [1], 'numbered_reply_email': 5, 'prohibited_terms': ['http://']}, 'person_cache_ttl_days': 30, 'email_cache_ttl_days': 14, 'expected_account_count': 0, 'max_companies_per_campaign': 0, 'projected_credits_per_person': 35, 'projected_fixed_credits_per_company': 0, 'approved_total_clay_credits': 0, 'approved_byoa_cost_usd': 0.0, 'preview_count_confirmed': False, 'segment_count_receipt': ''}\napprovals = {'spend_approved': False, 'copy_generation_approved': False, 'audience_write_approved': False, 'salesforce_write_approved': False, 'instantly_write_approved': False, 'approver': '', 'approved_config_hash': ''}"
+    },
+    {
+      "id": "account_adapter",
+      "name": "P00A Audience Launch-Ready Event Adapter",
+      "nodeType": "code",
+      "code": "fields = context.get('fields') or {}\nentry_entity_type = 'ACCOUNT'\ncompany = fields.get('Company name')\ndomain = fields.get('Domain') or fields.get('Cleaned Domain')\nemployees = fields.get('# of Employees')\nindustry = fields.get('Industry')\ncountry = fields.get('Country')"
+    },
+    {
+      "id": "sf_query",
+      "name": "P01D Build Bounded Salesforce Contact Query",
+      "nodeType": "code",
+      "code": "fields='Id,AccountId,FirstName,LastName,Email,Title,LinkedIn_URL__c,HasOptedOutOfEmail,DoNotCall,EmailBouncedReason,No_Longer_at_Company__c'\ncrm_contact_lookup_query=\"SELECT \"+fields+\" FROM Contact WHERE AccountId = 'x' AND Email != null AND HasOptedOutOfEmail = false AND DoNotCall = false AND EmailBouncedReason = null AND No_Longer_at_Company__c = false ORDER BY LastModifiedDate DESC LIMIT 25\""
+    },
+    {
+      "id": "qualify",
+      "name": "P05 Qualified Persona?",
+      "nodeType": "conditional",
+      "description": "Checks configured titles and exclusions."
+    },
+    {
+      "id": "existing",
+      "name": "P15 [READ ONLY] Find Existing Instantly Leads",
+      "nodeType": "tool",
+      "description": "Checks whether the person is already handled or blocklisted."
+    },
+    {
+      "id": "enrich",
+      "name": "P12 [PAID] Find & Verify Work Email via BetterContact",
+      "nodeType": "tool",
+      "description": "Uses credits only when a valid email is still missing."
+    },
+    {
+      "id": "generate",
+      "name": "P25 [AI] Generate Five-Email Sequence",
+      "nodeType": "agent",
+      "agentPrompt": "Generate subject1 through subject5 and body1 through body5."
+    },
+    {
+      "id": "validate",
+      "name": "P25B Deterministic Copy Contract Validator",
+      "nodeType": "code",
+      "code": "for i in range(1, 6): check(subject, body)"
+    },
+    {
+      "id": "approval",
+      "name": "P30 External Activation Approved?",
+      "nodeType": "conditional"
+    },
+    {
+      "id": "crm",
+      "name": "P33C [EXTERNAL MUTATION] Update Existing Salesforce Account",
+      "nodeType": "tool"
+    },
+    {
+      "id": "audience",
+      "name": "P41 Activated-Person Audience Upsert Approved?",
+      "nodeType": "conditional"
+    },
+    {
+      "id": "sequence",
+      "name": "P39 [EXTERNAL MUTATION] Add Lead to Instantly Campaign",
+      "nodeType": "tool"
+    },
+    {
+      "id": "receipt",
+      "name": "P40 Instantly Activation Reconciliation",
+      "nodeType": "code",
+      "description": "Builds a terminal receipt after an independent Instantly readback."
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "summary": {
+    "workflowId": "wf_fixture_valid",
+    "workflowName": "Valid governed campaign",
+    "workflowUrl": "https://example.invalid/wf_fixture_valid",
+    "nodeCount": 6,
+    "edges": [{}, {}, {}, {}, {}]
+  },
+  "nodes": [
+    {
+      "id": "manifest",
+      "name": "Campaign Configuration + Fail-Closed Preflight",
+      "nodeType": "code",
+      "code": "config = {'sequence_length': 5, 'campaign_state': 'CANARY_READY'}"
+    },
+    {
+      "id": "generate",
+      "name": "Generate Five-Email Sequence",
+      "nodeType": "agent",
+      "agentPrompt": "Write a five-email sequence and return JSON only.",
+      "outputSchema": {
+        "subject1": {"type": "string"}, "body1": {"type": "string"},
+        "subject2": {"type": "string"}, "body2": {"type": "string"},
+        "subject3": {"type": "string"}, "body3": {"type": "string"},
+        "subject4": {"type": "string"}, "body4": {"type": "string"},
+        "subject5": {"type": "string"}, "body5": {"type": "string"}
+      }
+    },
+    {
+      "id": "repair",
+      "name": "Repair Five-Email Sequence Once",
+      "nodeType": "agent",
+      "agentPrompt": "Repair this five-email sequence exactly once.",
+      "outputSchema": {
+        "subject1": {"type": "string"}, "body1": {"type": "string"},
+        "subject2": {"type": "string"}, "body2": {"type": "string"},
+        "subject3": {"type": "string"}, "body3": {"type": "string"},
+        "subject4": {"type": "string"}, "body4": {"type": "string"},
+        "subject5": {"type": "string"}, "body5": {"type": "string"}
+      }
+    },
+    {
+      "id": "validator",
+      "name": "Five-Email Copy Contract Validator",
+      "nodeType": "code",
+      "code": "for i in range(1, 6): subject = data.get('subject%s' % i); body = data.get('body%s' % i)"
+    },
+    {
+      "id": "qa",
+      "name": "QA Five-Email Sequence",
+      "nodeType": "agent",
+      "agentPrompt": "Review the five-email sequence and return a verdict only.",
+      "inputSchema": {
+        "subject1": {"type": "string"}, "body1": {"type": "string"},
+        "subject2": {"type": "string"}, "body2": {"type": "string"},
+        "subject3": {"type": "string"}, "body3": {"type": "string"},
+        "subject4": {"type": "string"}, "body4": {"type": "string"},
+        "subject5": {"type": "string"}, "body5": {"type": "string"}
+      }
+    },
+    {
+      "id": "payload",
+      "name": "Build Five-Email Sequencer Payload",
+      "nodeType": "code",
+      "code": "payload = {'subject_1': subject1, 'body_1': body1, 'subject_2': subject2, 'body_2': body2, 'subject_3': subject3, 'body_3': body3, 'subject_4': subject4, 'body_4': body4, 'subject_5': subject5, 'body_5': body5}"
+    }
+  ]
+}
