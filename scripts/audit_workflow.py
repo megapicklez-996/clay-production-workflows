@@ -12,6 +12,10 @@ from typing import Any
 
 from summarize_runs import summarize
 from validate_contract import analyze
+from check_evidence_compat import analyze_evidence
+from validate_graph_controls import analyze_graph_controls
+from validate_manifest import analyze_manifest
+from validate_reconciliation import analyze_reconciliation
 
 
 def load_json(path: Path, required: bool = True) -> Any:
@@ -39,19 +43,50 @@ def audit(evidence_dir: Path) -> dict[str, Any]:
     failed = load_json(evidence_dir / "failed-runs.json", required=False)
     workflow = load_json(evidence_dir / "workflow.json", required=False)
     triggers = load_json(evidence_dir / "triggers.json", required=False)
+    manifest = load_json(evidence_dir / "manifest.json", required=False)
+    receipts = load_json(evidence_dir / "receipts.json", required=False)
 
     nodes = list(graph.get("nodes") or [])
     summary = graph.get("summary") or {}
     type_counts = Counter(str(node.get("nodeType") or "unknown") for node in nodes)
     contract = analyze(graph, validation)
+    compatibility = analyze_evidence(evidence_dir)
+    manifest_audit = analyze_manifest(manifest) if manifest else {
+        "valid": False,
+        "configuration_hash": None,
+        "findings": [{"severity": "HIGH", "code": "manifest_evidence_missing"}],
+        "summary": {"blockers": 0, "high": 1, "warnings": 0},
+    }
+    graph_controls = analyze_graph_controls(graph, manifest or None)
+    reconciliation = analyze_reconciliation(
+        receipts, manifest_audit.get("configuration_hash")
+    ) if receipts else {
+        "valid": False,
+        "live_ready_proven": False,
+        "receipt_count": 0,
+        "outcome_counts": {},
+        "findings": [{"severity": "MEDIUM", "code": "reconciliation_receipts_not_supplied"}],
+        "summary": {"blockers": 0, "high": 0, "warnings": 1},
+    }
     run_summary = summarize(runs, failed)
 
     structural_ok = validation.get("valid") is True and not (validation.get("errors") or [])
     contract_ok = contract.get("valid") is True
-    if not structural_ok or not contract_ok:
+    governance_ok = (
+        compatibility.get("compatible") is True
+        and manifest_audit.get("valid") is True
+        and graph_controls.get("valid") is True
+    )
+    if not structural_ok or not contract_ok or not governance_ok:
         ceiling = "DRAFT_BLOCKED"
     elif run_summary["run_count"] == 0:
         ceiling = "PREVIEW_READY"
+    elif (
+        reconciliation.get("live_ready_proven") is True
+        and (manifest.get("campaign") or {}).get("state") == "LIVE_READY"
+        and (manifest.get("campaign") or {}).get("ready") is True
+    ):
+        ceiling = "LIVE_READY"
     else:
         ceiling = "CANARY_READY"
 
@@ -65,8 +100,12 @@ def audit(evidence_dir: Path) -> dict[str, Any]:
             "url": workflow.get("url") or summary.get("workflowUrl"),
         },
         "readiness_ceiling": ceiling,
-        "live_ready_proven": False,
-        "live_ready_reason": "Static evidence and run status cannot replace verified destination readbacks.",
+        "live_ready_proven": ceiling == "LIVE_READY",
+        "live_ready_reason": (
+            "Validated reconciliation receipts contain an activated canary with verified readbacks."
+            if ceiling == "LIVE_READY"
+            else "Static evidence and run status cannot replace verified destination readbacks."
+        ),
         "structure": {
             "node_count": summary.get("nodeCount") or len(nodes),
             "edge_count": len(summary.get("edges") or []),
@@ -87,7 +126,11 @@ def audit(evidence_dir: Path) -> dict[str, Any]:
             "warning_codes": sorted({str(item.get("code")) for item in warnings if item.get("code")}),
         },
         "semantic_contract": contract,
+        "manifest_contract": manifest_audit,
+        "graph_controls": graph_controls,
+        "evidence_compatibility": compatibility,
         "run_evidence": run_summary,
+        "reconciliation_evidence": reconciliation,
         "required_next_evidence": [
             "Exact terminal business outcomes for completed runs",
             "Readbacks from every intended external destination",

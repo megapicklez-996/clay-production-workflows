@@ -17,3 +17,7 @@
 | Cost controls | | | | |
 | Failure handling | | | | |
 | Reconciliation | | | | |
+| Accountable owners | | | | |
+| Kill switch and rollback | | | | |
+| Data classification and retention | | | | |
+| Evidence/CLI compatibility | | | | |

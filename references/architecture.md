@@ -30,6 +30,8 @@ or workbook for parity.
 - Every external mutation has a preceding gate and a following readback.
 - Every branch reaches a named terminal outcome; no-send is explicit.
 - Context passed to AI is compact, signed, and distinct from the operational receipt.
+- Production ownership, kill-switch controls, rollback evidence, and retention are
+  part of the contract rather than launch-day notes.
 
 ## Parity matrix
 

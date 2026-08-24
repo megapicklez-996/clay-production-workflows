@@ -40,6 +40,31 @@
 - BYOA ceiling:
 - Approval reference and expiry:
 
+## Ownership and operations
+
+- Business owner:
+- Builder:
+- Approver:
+- Reconciliation owner:
+- Incident owner:
+- Trigger pause method:
+- Known-good rollback snapshot:
+- Downstream remediation owner:
+
+## Data handling
+
+- Classification:
+- Allowed log fields:
+- Redacted fields:
+- Evidence retention:
+- Raw payload retention:
+
+## Evidence compatibility
+
+- Evidence contract version:
+- Clay CLI version:
+- Compatibility verdict:
+
 ## Failures and suppressions
 
 | Class | Count | Side-effect certainty | Required reconciliation |

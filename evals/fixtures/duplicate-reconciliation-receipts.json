@@ -1,0 +1,32 @@
+{
+  "data": [
+    {
+      "workflow_id": "wf_fixture_governed",
+      "campaign_key": "fixture-campaign",
+      "config_hash": "sha256:fixture",
+      "stable_identity_hash": "person:fixture",
+      "idempotency_key": "fixture-campaign:person:fixture",
+      "intended_destinations": {"sequencer": "seq_fixture_campaign"},
+      "external_receipts": {"sequencer": {"lead_id": "lead_one"}},
+      "readbacks": {"sequencer": {"verified": true}},
+      "side_effect_state": "verified",
+      "terminal_outcome": "activated_verified",
+      "reconciliation_required": true,
+      "reconciliation_owner": "revenue-operations"
+    },
+    {
+      "workflow_id": "wf_fixture_governed",
+      "campaign_key": "fixture-campaign",
+      "config_hash": "sha256:fixture",
+      "stable_identity_hash": "person:fixture",
+      "idempotency_key": "fixture-campaign:person:fixture",
+      "intended_destinations": {"sequencer": "seq_fixture_campaign"},
+      "external_receipts": {"sequencer": {"lead_id": "lead_two"}},
+      "readbacks": {"sequencer": {"verified": true}},
+      "side_effect_state": "verified",
+      "terminal_outcome": "activated_verified",
+      "reconciliation_required": true,
+      "reconciliation_owner": "revenue-operations"
+    }
+  ]
+}

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 WORKFLOW_RE = re.compile(r"^wf_[A-Za-z0-9]+$")
+EVIDENCE_CONTRACT_VERSION = 1
 
 
 class CollectError(RuntimeError):
@@ -65,6 +66,22 @@ def write_json(path: Path, value: Any) -> None:
         raise CollectError(f"Unable to write {path}: {exc}", 6) from exc
 
 
+def clay_version() -> str | None:
+    completed = subprocess.run(
+        ["clay", "--version"], capture_output=True, text=True, timeout=30, check=False
+    )
+    if completed.returncode != 0:
+        return None
+    return (completed.stdout or completed.stderr).strip() or None
+
+
+def load_local_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise CollectError(f"Unable to read local JSON from {path}: {exc}", 2) from exc
+
+
 def graph_trigger_ids(graph: dict[str, Any]) -> list[str]:
     summary = graph.get("summary") or {}
     return [str(item["id"]) for item in summary.get("triggers", []) if item.get("id")]
@@ -103,6 +120,8 @@ def parse_args() -> argparse.Namespace:
         default=5,
         help="Maximum failed runs to inspect without verbose inputs/outputs (default: 5)",
     )
+    parser.add_argument("--manifest", type=Path, help="Optional local campaign manifest to copy into the evidence bundle")
+    parser.add_argument("--receipts", type=Path, help="Optional local reconciliation receipts to copy into the evidence bundle")
     return parser.parse_args()
 
 
@@ -148,6 +167,10 @@ def main() -> int:
             failed_runs.append(compact_failed_run(detail))
 
         bundle = {
+            "collector-metadata.json": {
+                "evidence_contract_version": EVIDENCE_CONTRACT_VERSION,
+                "clay_cli_version": clay_version(),
+            },
             "identity.json": identity,
             "workflow.json": workflow,
             "graph.json": graph,
@@ -158,6 +181,10 @@ def main() -> int:
             "runs.json": runs,
             "failed-runs.json": {"data": failed_runs},
         }
+        if args.manifest:
+            bundle["manifest.json"] = load_local_json(args.manifest)
+        if args.receipts:
+            bundle["receipts.json"] = load_local_json(args.receipts)
         for filename, payload in bundle.items():
             write_json(args.output / filename, payload)
 
