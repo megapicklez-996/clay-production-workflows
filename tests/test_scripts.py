@@ -84,6 +84,15 @@ class ManifestTests(unittest.TestCase):
         self.assertIn("kill_switch_incomplete", codes)
         self.assertIn("evidence_retention_invalid", codes)
 
+    def test_live_ready_requires_configured_destination_and_activation_approvals(self):
+        manifest = copy.deepcopy(fixture("valid-campaign-manifest.json"))
+        manifest["campaign"].update({"state": "LIVE_READY", "ready": True})
+        result = analyze_manifest(manifest)
+        codes = {item["code"] for item in result["findings"]}
+        self.assertFalse(result["valid"])
+        self.assertIn("live_ready_destination_approvals_missing", codes)
+        self.assertIn("live_ready_outbound_activation_approval_missing", codes)
+
 
 class GraphControlTests(unittest.TestCase):
     def test_valid_graph_has_payload_suppression_and_readback(self):
@@ -144,6 +153,17 @@ class ReconciliationTests(unittest.TestCase):
         )
         self.assertFalse(result["valid"])
         self.assertIn("receipt_config_hash_mismatch", {item["code"] for item in result["findings"]})
+
+    def test_activated_receipt_requires_non_empty_receipt_and_exact_readback_id(self):
+        payload = copy.deepcopy(fixture("valid-reconciliation-receipts.json"))
+        row = payload["data"][0]
+        row["external_receipts"]["sequencer"] = {}
+        row["readbacks"]["sequencer"].pop("campaign_id")
+        result = analyze_reconciliation(payload)
+        codes = {item["code"] for item in result["findings"]}
+        self.assertFalse(result["valid"])
+        self.assertIn("activated_without_external_receipts", codes)
+        self.assertIn("readback_destination_mismatch", codes)
 
 
 def write_evidence(directory, *, graph=None, manifest=None, receipts=None, runs=None):

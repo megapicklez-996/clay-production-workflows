@@ -217,6 +217,36 @@ def analyze_manifest(
     if approvals.get("outbound_activation") is True and approvals.get("sequencer_write") is not True:
         add(findings, "BLOCKER", "activation_without_sequencer_write_approval")
 
+    # A LIVE_READY claim must carry approval for every destination the payload
+    # contract actually writes to, plus the separate activation approval.  A
+    # manifest with configured writes and all-false approvals must never pass
+    # merely because it has otherwise complete governance metadata.
+    if state == "LIVE_READY":
+        destination_approval_keys = {
+            "audience": "audience_write",
+            "crm": "crm_write",
+            "sequencer": "sequencer_write",
+        }
+        configured_destinations = sorted(
+            destination
+            for destination in (payload_contract.get("destination_fields") or {})
+            if destination in destination_approval_keys
+        )
+        missing_destination_approvals = [
+            destination_approval_keys[destination]
+            for destination in configured_destinations
+            if approvals.get(destination_approval_keys[destination]) is not True
+        ]
+        if missing_destination_approvals:
+            add(
+                findings,
+                "BLOCKER",
+                "live_ready_destination_approvals_missing",
+                fields=missing_destination_approvals,
+            )
+        if approvals.get("outbound_activation") is not True:
+            add(findings, "BLOCKER", "live_ready_outbound_activation_approval_missing")
+
     production_claim = bool(enabled_approvals or campaign.get("ready") or state == "LIVE_READY")
     if production_claim:
         missing_owners = [key for key in OWNER_KEYS if not ownership.get(key)]

@@ -113,7 +113,11 @@ def analyze_reconciliation(payload: Any, expected_config_hash: str | None = None
                 )
             external_receipts = receipt.get("external_receipts") or {}
             missing_write_receipts = sorted(
-                intended - set(external_receipts if isinstance(external_receipts, dict) else {})
+                destination
+                for destination in intended
+                if not isinstance(external_receipts, dict)
+                or not isinstance(external_receipts.get(destination), dict)
+                or not external_receipts[destination]
             )
             if missing_write_receipts:
                 add(
@@ -124,17 +128,35 @@ def analyze_reconciliation(payload: Any, expected_config_hash: str | None = None
                     destinations=missing_write_receipts,
                 )
 
+            intended_values = receipt.get("intended_destinations") or {}
             for destination in sorted(intended & verified):
-                intended_value = (receipt.get("intended_destinations") or {}).get(destination)
+                intended_value = intended_values.get(destination) if isinstance(intended_values, dict) else None
                 readback_value = readbacks.get(destination) if isinstance(readbacks, dict) else None
-                if not isinstance(intended_value, str) or not isinstance(readback_value, dict):
+                if not isinstance(intended_value, str) or not intended_value:
+                    add(
+                        findings,
+                        "BLOCKER",
+                        "intended_destination_id_missing",
+                        index=index,
+                        destination=destination,
+                    )
+                    continue
+                if not isinstance(readback_value, dict):
+                    add(
+                        findings,
+                        "BLOCKER",
+                        "readback_destination_id_missing",
+                        index=index,
+                        destination=destination,
+                        intended=intended_value,
+                    )
                     continue
                 observed_ids = {
                     str(readback_value[key])
                     for key in ("destination_id", "campaign_id", "audience_id")
                     if readback_value.get(key)
                 }
-                if observed_ids and intended_value not in observed_ids:
+                if intended_value not in observed_ids:
                     add(
                         findings,
                         "BLOCKER",
