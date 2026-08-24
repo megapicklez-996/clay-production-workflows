@@ -1,0 +1,58 @@
+{
+  "schema": "orchid.work.execution-shape/v1",
+  "repository": "orchidautomation/clay-production-workflows",
+  "sourceRef": "codex/pr-2-governance-fixes",
+  "sourceCommit": "7c2ecf47de14132fb86c15ecfa8f22b3662150e5",
+  "plan": {
+    "path": "docs/orchid/plans/PR-2.md",
+    "sha256": "f0787b9605d1351154a7065a3619280ab4f29a910f2b7a6360297e161015cd71",
+    "sourceRef": "codex/pr-2-governance-fixes",
+    "sourceCommit": "7c2ecf47de14132fb86c15ecfa8f22b3662150e5"
+  },
+  "risk": "Elevated",
+  "orchestrationRequired": true,
+  "selectedShape": "inline-luna",
+  "delivery": {
+    "shape": "single-pr",
+    "sourceRef": "codex/pr-2-governance-fixes",
+    "targetRef": "main",
+    "pullRequestCount": 1
+  },
+  "solIntegrationOwnership": [
+    "docs/orchid/plans/PR-2.md"
+  ],
+  "lunaLanes": [
+    {
+      "issueId": "PR-2",
+      "taskId": "/root/pr_2_governance_fix",
+      "ownership": [
+        "scripts/validate_manifest.py",
+        "scripts/validate_reconciliation.py",
+        "tests/test_scripts.py"
+      ],
+      "assignedBranch": "codex/pr-2-governance-fixes",
+      "observedBranch": "codex/pr-2-governance-fixes",
+      "worktreeBindingState": "confirmed",
+      "plan": {
+        "path": "docs/orchid/plans/PR-2.md",
+        "sha256": "f0787b9605d1351154a7065a3619280ab4f29a910f2b7a6360297e161015cd71",
+        "sourceRef": "codex/pr-2-governance-fixes",
+        "sourceCommit": "7c2ecf47de14132fb86c15ecfa8f22b3662150e5"
+      },
+      "execution": {
+        "model": "gpt-5.6-luna",
+        "reasoningEffort": "medium",
+        "role": "execute-pinned-plan-only",
+        "requestedServiceTier": "fast",
+        "fastModeState": "fallback",
+        "fallbackReason": "Native collaboration dispatch does not expose explicit service-tier control or observation."
+      }
+    }
+  ],
+  "exceptionReason": null,
+  "exceptionPaths": [],
+  "exceptionJustification": null,
+  "validation": [],
+  "verdict": "valid",
+  "observedAt": "2026-08-24T16:45:00Z"
+}
