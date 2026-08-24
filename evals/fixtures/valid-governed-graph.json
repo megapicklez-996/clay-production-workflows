@@ -1,0 +1,65 @@
+{
+  "summary": {
+    "workflowId": "wf_fixture_governed",
+    "workflowName": "Valid governed activation",
+    "nodeCount": 6,
+    "edges": [
+      {"sourceNodeId": "preflight", "targetNodeId": "suppress"},
+      {"sourceNodeId": "suppress", "targetNodeId": "payload"},
+      {"sourceNodeId": "payload", "targetNodeId": "write"},
+      {"sourceNodeId": "write", "targetNodeId": "readback"},
+      {"sourceNodeId": "readback", "targetNodeId": "terminal"}
+    ]
+  },
+  "nodes": [
+    {
+      "id": "preflight",
+      "name": "Campaign Preflight and Idempotency",
+      "nodeType": "code",
+      "code": "approval_valid = config_hash == approved_config_hash; idempotency_key = campaign_key + ':' + stable_identity_hash; sequencer_campaign_id = 'seq_fixture_campaign'"
+    },
+    {
+      "id": "suppress",
+      "name": "Just-in-Time Suppression: Replies, Bounces, Unsubscribes, Blocklist",
+      "nodeType": "code",
+      "code": "suppressed = replied or bounced or unsubscribed or blocklisted"
+    },
+    {
+      "id": "payload",
+      "name": "Build Exact Sequencer Payload",
+      "nodeType": "code",
+      "code": "payload = {'email': email, 'first_name': first_name, 'last_name': last_name, 'title': title, 'linkedin_url': linkedin_url, 'subject1': subject1, 'body1': body1}"
+    },
+    {
+      "id": "write",
+      "name": "[EXTERNAL MUTATION] Add Lead to Instantly Campaign",
+      "nodeType": "tool",
+      "tools": [
+        {
+          "actionKey": "instantly-add-lead",
+          "inputMappingConfig": {
+            "email": {"type": "reference", "expression": "$.payload.email"},
+            "first_name": {"type": "reference", "expression": "$.payload.first_name"},
+            "last_name": {"type": "reference", "expression": "$.payload.last_name"},
+            "title": {"type": "reference", "expression": "$.payload.title"},
+            "linkedin_url": {"type": "reference", "expression": "$.payload.linkedin_url"},
+            "subject1": {"type": "reference", "expression": "$.payload.subject1"},
+            "body1": {"type": "reference", "expression": "$.payload.body1"}
+          }
+        }
+      ]
+    },
+    {
+      "id": "readback",
+      "name": "[READ ONLY] Verify Instantly Lead and Campaign",
+      "nodeType": "tool",
+      "tools": [{"actionKey": "instantly-find-lead"}]
+    },
+    {
+      "id": "terminal",
+      "name": "Finalize Activated and Verified Receipt",
+      "nodeType": "code",
+      "code": "terminal_outcome = 'activated_verified'"
+    }
+  ]
+}

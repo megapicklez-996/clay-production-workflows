@@ -1,0 +1,15 @@
+{
+  "workflow_id": "wf_fixture_governed",
+  "campaign_key": "fixture-campaign",
+  "config_hash": "sha256:fixture",
+  "stable_identity_hash": "person:fixture",
+  "idempotency_key": "fixture-campaign:person:fixture",
+  "intended_destinations": {"sequencer": "seq_fixture_campaign"},
+  "external_receipts": {"sequencer": {"request_id": "req_fixture"}},
+  "readbacks": {},
+  "side_effect_state": "submitted_unknown",
+  "error": "Timeout after submission",
+  "terminal_outcome": "reconciliation_failure",
+  "reconciliation_required": true,
+  "reconciliation_owner": "revenue-operations"
+}

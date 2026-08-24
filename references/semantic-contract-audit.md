@@ -13,6 +13,10 @@ manifest and validator while its generation, repair, and QA agents handled only 
 3. Compare names, prompts, schemas, deterministic code, repair, QA, payload mappings, and receipts.
 4. Report both sides of each mismatch and the first unsafe effect.
 5. Run `scripts/validate_contract.py`, then inspect fields it marks unknown.
+6. Run `scripts/validate_graph_controls.py` with the manifest to check exact
+   destination payload requirements, write-to-readback reachability, idempotency,
+   suppression, and terminal leaves. Treat unavailable mappings or edges as unknown,
+   not as a pass.
 
 ## Checks
 
@@ -26,6 +30,9 @@ manifest and validator while its generation, repair, and QA agents handled only 
 - QA examines exactly what will be sent and returns verdicts, not rewritten copy.
 - Readbacks verify the same object and campaign the write targeted.
 - Node names do not describe stale behavior that conflicts with prompts or schemas.
+- Every approved destination has an inspectable write mapping containing its manifest
+  payload fields and a downstream readback.
+- Every graph leaf records one recognized terminal outcome.
 
 ## Severity
 

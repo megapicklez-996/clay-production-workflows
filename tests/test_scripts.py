@@ -1,4 +1,5 @@
 import json
+import copy
 import sys
 import tempfile
 import unittest
@@ -11,6 +12,10 @@ from audit_workflow import audit
 from explain_workflow import build_model, render_markdown
 from summarize_runs import classify_error, summarize
 from validate_contract import analyze
+from check_evidence_compat import analyze_evidence
+from validate_graph_controls import analyze_graph_controls
+from validate_manifest import analyze_manifest, configuration_hash
+from validate_reconciliation import analyze_reconciliation
 
 
 def fixture(name):
@@ -31,6 +36,83 @@ class ContractTests(unittest.TestCase):
         self.assertGreaterEqual(result["summary"]["blockers"], 1)
 
 
+class ManifestTests(unittest.TestCase):
+    def test_valid_draft_manifest(self):
+        result = analyze_manifest(fixture("valid-campaign-manifest.json"))
+        self.assertTrue(result["valid"])
+        self.assertTrue(result["configuration_hash"].startswith("sha256:"))
+
+    def test_configuration_change_invalidates_approval(self):
+        manifest = fixture("valid-campaign-manifest.json")
+        manifest["approvals"].update({
+            "paid_work": True,
+            "config_hash": configuration_hash(manifest),
+            "reference": "APPROVAL-1",
+            "approver": "growth-lead",
+            "approved_at": "2030-01-01T00:00:00Z",
+            "expires_at": "2099-01-01T00:00:00Z",
+        })
+        self.assertTrue(analyze_manifest(manifest)["valid"])
+        manifest["budgets"]["worst_case_credits_per_record"] = 3
+        result = analyze_manifest(manifest)
+        self.assertFalse(result["valid"])
+        self.assertIn("approval_config_hash_mismatch", {item["code"] for item in result["findings"]})
+
+    def test_template_placeholders_block_instantiation(self):
+        template = json.loads((ROOT / "assets" / "campaign-manifest.template.json").read_text())
+        result = analyze_manifest(template)
+        self.assertFalse(result["valid"])
+        self.assertIn("manifest_placeholders_present", {item["code"] for item in result["findings"]})
+
+    def test_live_write_requires_owners_kill_switch_and_retention(self):
+        manifest = fixture("valid-campaign-manifest.json")
+        manifest["ownership"]["incident_owner"] = ""
+        manifest["operations"]["kill_switch"]["pause_method"] = ""
+        manifest["data_handling"]["evidence_retention_days"] = -1
+        manifest["approvals"].update({
+            "sequencer_write": True,
+            "config_hash": configuration_hash(manifest),
+            "reference": "APPROVAL-OPS-1",
+            "approver": "growth-lead",
+            "approved_at": "2030-01-01T00:00:00Z",
+            "expires_at": "2099-01-01T00:00:00Z",
+        })
+        result = analyze_manifest(manifest)
+        codes = {item["code"] for item in result["findings"]}
+        self.assertFalse(result["valid"])
+        self.assertIn("production_owners_missing", codes)
+        self.assertIn("kill_switch_incomplete", codes)
+        self.assertIn("evidence_retention_invalid", codes)
+
+    def test_live_ready_requires_configured_destination_and_activation_approvals(self):
+        manifest = copy.deepcopy(fixture("valid-campaign-manifest.json"))
+        manifest["campaign"].update({"state": "LIVE_READY", "ready": True})
+        result = analyze_manifest(manifest)
+        codes = {item["code"] for item in result["findings"]}
+        self.assertFalse(result["valid"])
+        self.assertIn("live_ready_destination_approvals_missing", codes)
+        self.assertIn("live_ready_outbound_activation_approval_missing", codes)
+
+
+class GraphControlTests(unittest.TestCase):
+    def test_valid_graph_has_payload_suppression_and_readback(self):
+        result = analyze_graph_controls(
+            fixture("valid-governed-graph.json"), fixture("valid-campaign-manifest.json")
+        )
+        self.assertTrue(result["valid"], result["findings"])
+
+    def test_missing_payload_fields_readback_and_terminal_block(self):
+        result = analyze_graph_controls(
+            fixture("unsafe-governed-graph.json"), fixture("valid-campaign-manifest.json")
+        )
+        codes = {item["code"] for item in result["findings"]}
+        self.assertFalse(result["valid"])
+        self.assertIn("required_payload_fields_not_mapped", codes)
+        self.assertIn("external_write_without_downstream_readback", codes)
+        self.assertIn("leaf_without_terminal_outcome", codes)
+        self.assertIn("idempotency_control_not_detected", codes)
+
+
 class RunSummaryTests(unittest.TestCase):
     def test_completed_does_not_become_activation_rate(self):
         result = summarize(fixture("runs-mixed.json"), fixture("provider-html-failure.json"))
@@ -44,23 +126,118 @@ class RunSummaryTests(unittest.TestCase):
         self.assertIn("do_not_bypass", action)
 
 
+class ReconciliationTests(unittest.TestCase):
+    def test_verified_canary_can_prove_live_ready(self):
+        result = analyze_reconciliation(fixture("valid-reconciliation-receipts.json"))
+        self.assertTrue(result["valid"])
+        self.assertTrue(result["live_ready_proven"])
+
+    def test_duplicate_rerun_detects_two_activations(self):
+        result = analyze_reconciliation(fixture("duplicate-reconciliation-receipts.json"))
+        self.assertFalse(result["valid"])
+        self.assertIn(
+            "duplicate_activation_for_idempotency_key",
+            {item["code"] for item in result["findings"]},
+        )
+
+    def test_timeout_after_submission_requires_readback(self):
+        result = analyze_reconciliation(fixture("ambiguous-timeout-receipt.json"))
+        self.assertFalse(result["valid"])
+        finding = next(item for item in result["findings"] if item["code"] == "external_write_side_effect_unknown")
+        self.assertEqual(finding["safe_next_action"], "read_destination_before_retry")
+
+    def test_receipt_must_match_manifest_configuration(self):
+        manifest = fixture("valid-campaign-manifest.json")
+        result = analyze_reconciliation(
+            fixture("valid-reconciliation-receipts.json"), configuration_hash(manifest)
+        )
+        self.assertFalse(result["valid"])
+        self.assertIn("receipt_config_hash_mismatch", {item["code"] for item in result["findings"]})
+
+    def test_activated_receipt_requires_non_empty_receipt_and_exact_readback_id(self):
+        payload = copy.deepcopy(fixture("valid-reconciliation-receipts.json"))
+        row = payload["data"][0]
+        row["external_receipts"]["sequencer"] = {}
+        row["readbacks"]["sequencer"].pop("campaign_id")
+        result = analyze_reconciliation(payload)
+        codes = {item["code"] for item in result["findings"]}
+        self.assertFalse(result["valid"])
+        self.assertIn("activated_without_external_receipts", codes)
+        self.assertIn("readback_destination_mismatch", codes)
+
+
+def write_evidence(directory, *, graph=None, manifest=None, receipts=None, runs=None):
+    values = {
+        "collector-metadata.json": {"evidence_contract_version": 1, "clay_cli_version": "fixture"},
+        "identity.json": {"workspace": {"id": "ws_fixture"}, "user": {"id": "user_fixture"}},
+        "workflow.json": {"id": "wf_fixture_governed", "name": "Governed Fixture"},
+        "graph.json": graph or fixture("valid-governed-graph.json"),
+        "validation.json": {"valid": True, "errors": [], "warnings": []},
+        "snapshots.json": {"data": []},
+        "triggers.json": {"data": []},
+        "runs.json": runs or {"data": []},
+        "failed-runs.json": {"data": []},
+    }
+    if manifest is not None:
+        values["manifest.json"] = manifest
+    if receipts is not None:
+        values["receipts.json"] = receipts
+    for name, value in values.items():
+        (directory / name).write_text(json.dumps(value), encoding="utf-8")
+
+
+class EvidenceCompatibilityTests(unittest.TestCase):
+    def test_current_evidence_shape_is_compatible(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            write_evidence(directory)
+            self.assertTrue(analyze_evidence(directory)["compatible"])
+
+    def test_changed_graph_shape_blocks_automated_audit(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            graph = fixture("valid-governed-graph.json")
+            graph["nodes"] = {"unexpected": "shape"}
+            write_evidence(directory, graph=graph)
+            result = analyze_evidence(directory)
+            self.assertFalse(result["compatible"])
+            self.assertIn("graph_shape_changed", {item["code"] for item in result["findings"]})
+
+
 class AuditTests(unittest.TestCase):
     def test_untested_mismatch_is_draft_blocked(self):
         with tempfile.TemporaryDirectory() as raw:
             directory = Path(raw)
-            files = {
-                "graph.json": fixture("sequence-contract-mismatch.json"),
-                "validation.json": {"valid": True, "errors": [], "warnings": []},
-                "runs.json": {"data": []},
-                "failed-runs.json": {"data": []},
-                "workflow.json": {"id": "wf_fixture_mismatch", "name": "Mismatch"},
-                "triggers.json": {"data": []}
-            }
-            for name, value in files.items():
-                (directory / name).write_text(json.dumps(value), encoding="utf-8")
+            write_evidence(directory, graph=fixture("sequence-contract-mismatch.json"))
             result = audit(directory)
             self.assertEqual(result["readiness_ceiling"], "DRAFT_BLOCKED")
             self.assertFalse(result["live_ready_proven"])
+
+    def test_verified_canary_and_governance_can_reach_live_ready(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            manifest = copy.deepcopy(fixture("valid-campaign-manifest.json"))
+            manifest["campaign"].update({"state": "LIVE_READY", "ready": True})
+            manifest["approvals"].update({
+                "sequencer_write": True,
+                "outbound_activation": True,
+                "config_hash": configuration_hash(manifest),
+                "reference": "APPROVAL-LIVE-1",
+                "approver": "growth-lead",
+                "approved_at": "2030-01-01T00:00:00Z",
+                "expires_at": "2099-01-01T00:00:00Z",
+            })
+            receipts = copy.deepcopy(fixture("valid-reconciliation-receipts.json"))
+            receipts["data"][0]["config_hash"] = configuration_hash(manifest)
+            write_evidence(
+                directory,
+                manifest=manifest,
+                receipts=receipts,
+                runs={"data": [{"status": "completed"}]},
+            )
+            result = audit(directory)
+            self.assertEqual(result["readiness_ceiling"], "LIVE_READY", result)
+            self.assertTrue(result["live_ready_proven"])
 
 
 class ExplainerTests(unittest.TestCase):

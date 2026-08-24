@@ -1,0 +1,32 @@
+{
+  "summary": {
+    "workflowId": "wf_fixture_unsafe",
+    "workflowName": "Unsafe activation",
+    "nodeCount": 2,
+    "edges": [{"sourceNodeId": "payload", "targetNodeId": "write"}]
+  },
+  "nodes": [
+    {
+      "id": "payload",
+      "name": "Build Partial Payload",
+      "nodeType": "code",
+      "code": "payload = {'email': email, 'first_name': first_name, 'subject1': subject1, 'body1': body1}"
+    },
+    {
+      "id": "write",
+      "name": "[EXTERNAL MUTATION] Add Lead to Instantly Campaign",
+      "nodeType": "tool",
+      "tools": [
+        {
+          "actionKey": "instantly-add-lead",
+          "inputMappingConfig": {
+            "email": {"type": "reference", "expression": "$.payload.email"},
+            "first_name": {"type": "reference", "expression": "$.payload.first_name"},
+            "subject1": {"type": "reference", "expression": "$.payload.subject1"},
+            "body1": {"type": "reference", "expression": "$.payload.body1"}
+          }
+        }
+      ]
+    }
+  ]
+}

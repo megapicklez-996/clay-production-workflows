@@ -13,5 +13,10 @@
 11. Bind approval to final manifest hash, approver, timestamp, and expiry.
 12. Follow the bounded ladder.
 
+Before approval, name all five production owners, record the trigger pause method and
+known-good rollback snapshot, and set the log allowlist, redactions, and retention.
+Use the hash emitted by `scripts/validate_manifest.py`; approval fields are excluded
+from normalization so the approval evidence does not hash itself.
+
 Changing sequence length requires updating generator, repair, validator, QA, payload,
 destination variables, and receipts. A structurally valid, untested template is unproven.

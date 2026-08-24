@@ -127,6 +127,11 @@ Depending on the request, the agent should produce one or more of these artifact
   approval scope.
 - A reconciliation plan showing how every external write will be read back.
 - A reusable campaign manifest or parity matrix for a migration or template.
+- A deterministic manifest hash and approval-drift report.
+- A graph-control report covering destination payloads, idempotency, suppression,
+  terminal outcomes, and downstream readbacks.
+- A reconciliation audit for duplicate activation and ambiguous partial writes.
+- An evidence-compatibility verdict tied to the collector contract and Clay CLI version.
 
 `LIVE_READY` has a deliberately high bar. It requires a real canary that reached
 every intended destination and was independently read back. Static graph inspection
@@ -148,7 +153,9 @@ Collect a read-only evidence bundle:
 
 ```bash
 python3 scripts/collect_workflow_evidence.py WORKFLOW_ID \
-  --output .clay-evidence/WORKFLOW_ID
+  --output .clay-evidence/WORKFLOW_ID \
+  --manifest campaign-manifest.json \
+  --receipts reconciliation-receipts.json
 ```
 
 The collector reads workflow metadata, graph, validation, diagram, snapshots,
@@ -160,6 +167,19 @@ Run the audit:
 ```bash
 python3 scripts/validate_contract.py .clay-evidence/WORKFLOW_ID/graph.json \
   --validation .clay-evidence/WORKFLOW_ID/validation.json
+
+python3 scripts/validate_manifest.py \
+  .clay-evidence/WORKFLOW_ID/manifest.json
+
+python3 scripts/validate_graph_controls.py \
+  .clay-evidence/WORKFLOW_ID/graph.json \
+  --manifest .clay-evidence/WORKFLOW_ID/manifest.json
+
+python3 scripts/check_evidence_compat.py .clay-evidence/WORKFLOW_ID
+
+python3 scripts/validate_reconciliation.py \
+  .clay-evidence/WORKFLOW_ID/receipts.json \
+  --manifest .clay-evidence/WORKFLOW_ID/manifest.json
 
 python3 scripts/summarize_runs.py .clay-evidence/WORKFLOW_ID/runs.json \
   --failed-runs .clay-evidence/WORKFLOW_ID/failed-runs.json
@@ -186,6 +206,16 @@ Everything below runs against synthetic fixtures:
 python3 scripts/validate_contract.py \
   evals/fixtures/valid-production-workflow.json
 
+python3 scripts/validate_manifest.py \
+  evals/fixtures/valid-campaign-manifest.json
+
+python3 scripts/validate_graph_controls.py \
+  evals/fixtures/valid-governed-graph.json \
+  --manifest evals/fixtures/valid-campaign-manifest.json
+
+python3 scripts/validate_reconciliation.py \
+  evals/fixtures/valid-reconciliation-receipts.json
+
 python3 scripts/summarize_runs.py \
   evals/fixtures/runs-mixed.json
 
@@ -205,8 +235,8 @@ safe way to see the expected level of detail.
 | Path | Purpose |
 | --- | --- |
 | `SKILL.md` | Routing, operating modes, safety boundaries, and the production methodology |
-| `scripts/` | Read-only evidence collection, contract validation, run classification, auditing, and explanation |
-| `references/` | Architecture, testing, reconciliation, failure handling, template instantiation, and explainer guidance |
+| `scripts/` | Read-only evidence collection, manifest/graph/receipt/compatibility validation, run classification, auditing, and explanation |
+| `references/` | Architecture, testing, reconciliation, operations, data handling, failure handling, template instantiation, and explainer guidance |
 | `assets/` | Campaign manifest, audit report, launch checklist, parity matrix, reconciliation schema, and explainer templates |
 | `evals/` | Trigger queries, synthetic workflow fixtures, failures, and expected results |
 | `tests/` | Offline unit tests for the bundled tools |

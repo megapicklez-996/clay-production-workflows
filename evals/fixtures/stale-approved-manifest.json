@@ -1,0 +1,31 @@
+{
+  "template": {"name": "governed", "version": "1.1.0", "source_workflow_id": "wf_fixture", "source_snapshot_id": "snap_fixture"},
+  "campaign": {"key": "stale-approval", "name": "Stale Approval", "version": "1.0", "owner": "revops", "state": "CANARY_READY", "ready": true},
+  "sources": {"account_segment_id": "seg_control", "person_queue_segment_id": "seg_people", "entity_type": "CONTACT", "expected_count": 10, "count_observed_at": "2030-01-01T00:00:00Z"},
+  "eligibility": {
+    "account_rules": {}, "person_rules": {}, "people_per_company": 1,
+    "required_account_fields": ["domain"],
+    "required_person_fields": ["email", "title", "linkedin_url"]
+  },
+  "copy_contract": {"sequence_length": 1, "subject_fields": ["subject1"], "body_fields": ["body1"], "prohibited_terms": [], "required_phrases": [], "allow_urls": false},
+  "payload_contract": {"destination_fields": {"sequencer": ["email", "title", "linkedin_url", "subject1", "body1"]}},
+  "destinations": {"audience_id": "seg_result", "crm_campaign_id": "crm_campaign", "sequencer_campaign_id": "seq_changed_after_approval"},
+  "budgets": {"expected_records": 10, "worst_case_credits_per_record": 3, "approved_total_clay_credits": 30, "approved_byoa_cost_usd": 5},
+  "approvals": {
+    "config_hash": "sha256:hash-from-before-destination-and-budget-change",
+    "reference": "APPROVAL-STALE-1",
+    "approver": "growth-lead",
+    "approved_at": "2030-01-01T00:00:00Z",
+    "expires_at": "2099-01-01T00:00:00Z",
+    "paid_work": true,
+    "copy_generation": true,
+    "audience_write": false,
+    "crm_write": false,
+    "sequencer_write": true,
+    "outbound_activation": true
+  },
+  "ownership": {"business_owner": "revops", "builder": "automation", "approver": "growth-lead", "reconciliation_owner": "revops", "incident_owner": "on-call"},
+  "operations": {"kill_switch": {"owner": "on-call", "trigger_ids": ["trg_fixture"], "pause_method": "disable trigger", "rollback_snapshot_id": "snap_fixture", "downstream_remediation_owner": "revops"}},
+  "data_handling": {"classification": "CONFIDENTIAL", "allowed_log_fields": ["run_id", "terminal_outcome"], "redacted_fields": ["email", "message_body", "credentials"], "evidence_retention_days": 30, "raw_payload_retention_days": 0},
+  "reconciliation": {"owner": "revops", "required_readbacks": ["sequencer"], "success_outcome": "activated_verified"}
+}

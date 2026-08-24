@@ -3,7 +3,7 @@ name: clay-production-workflows
 description: Build, migrate, explain, audit, test, and launch-gate multi-node Clay Workflows that enrich accounts or people and may write to Audiences, a CRM, or a sequencer. Use for plain-English walkthroughs of production workflows, production hardening, parity migrations, reusable campaign templates, bounded canaries, semantic contract checks, cost and approval gates, payload completeness, idempotency, and downstream reconciliation. Do not use for simple table explanations, one-off enrichment questions, or read-only audience counts.
 metadata:
   author: orchid-automation
-  version: "0.4.0"
+  version: "0.5.0"
 ---
 
 # Clay Production Workflows
@@ -34,7 +34,8 @@ and network access. Fixture analysis and semantic checks work without Clay acces
 1. **Audit an existing workflow** — collect read-only evidence, validate the graph,
    run the semantic contract audit, inspect run outcomes, and issue a readiness
    ceiling. Read [semantic-contract-audit.md](references/semantic-contract-audit.md)
-   and [failure-taxonomy.md](references/failure-taxonomy.md).
+   and [failure-taxonomy.md](references/failure-taxonomy.md). When launch or live
+   operation is in scope, also read [operations-and-data.md](references/operations-and-data.md).
 2. **Build or migrate for parity** — define the canonical contract, stage the
    architecture, add fail-closed controls, and prove parity with bounded evidence.
    Read [architecture.md](references/architecture.md).
@@ -55,7 +56,8 @@ Confirm the Clay workspace once with `clay whoami`. Share the workflow link and
 human-readable name. Then prefer the bundled collector over repeated ad hoc commands:
 
 ```bash
-python3 scripts/collect_workflow_evidence.py WORKFLOW_ID --output EVIDENCE_DIR
+python3 scripts/collect_workflow_evidence.py WORKFLOW_ID --output EVIDENCE_DIR \
+  --manifest campaign-manifest.json --receipts reconciliation-receipts.json
 ```
 
 The collector only reads workflow metadata, graph, validation, diagram, snapshots,
@@ -66,6 +68,12 @@ Audit the evidence:
 ```bash
 python3 scripts/validate_contract.py EVIDENCE_DIR/graph.json \
   --validation EVIDENCE_DIR/validation.json
+python3 scripts/validate_manifest.py EVIDENCE_DIR/manifest.json
+python3 scripts/validate_graph_controls.py EVIDENCE_DIR/graph.json \
+  --manifest EVIDENCE_DIR/manifest.json
+python3 scripts/check_evidence_compat.py EVIDENCE_DIR
+python3 scripts/validate_reconciliation.py EVIDENCE_DIR/receipts.json \
+  --manifest EVIDENCE_DIR/manifest.json
 python3 scripts/summarize_runs.py EVIDENCE_DIR/runs.json \
   --failed-runs EVIDENCE_DIR/failed-runs.json
 python3 scripts/audit_workflow.py EVIDENCE_DIR
@@ -84,11 +92,17 @@ replacing these scripts. Structured data goes to stdout; diagnostics go to stder
 
 Define one campaign manifest covering campaign identity, sources, eligibility,
 required fields, exact sequence length, destinations, suppression, worst-case cost,
-approval scope, terminal outcomes, and reconciliation ownership.
+approval scope, payload fields by destination, terminal outcomes, accountable owners,
+kill-switch and rollback details, data handling, and reconciliation ownership.
 
 Start from [campaign-manifest.template.json](assets/campaign-manifest.template.json).
 Defaults must permit no paid work and no external writes. Changing the normalized
 manifest must invalidate prior approval.
+
+The normalized configuration excludes the `approvals` object so approval evidence
+does not create a circular hash. Use the hash reported by
+`scripts/validate_manifest.py`; never hand-edit or approximate it. A production
+claim requires named business, build, approval, reconciliation, and incident owners.
 
 ## Production architecture
 
@@ -135,6 +149,12 @@ failure, destination rejection, or reconciliation failure.
 Use only `DRAFT_BLOCKED`, `PREVIEW_READY`, `CANARY_READY`, or `LIVE_READY`.
 `LIVE_READY` requires a real canary that reached every intended destination and was
 independently read back. Static inspection can set a ceiling but cannot prove it.
+
+Before live operation, record the exact trigger pause method, rollback snapshot,
+downstream remediation owner, permitted log fields, redactions, and retention. A
+snapshot restore changes the draft only; it is not a live rollback until the
+restored graph is re-audited, approved, and published. See
+[operations-and-data.md](references/operations-and-data.md).
 
 ## Failure handling
 

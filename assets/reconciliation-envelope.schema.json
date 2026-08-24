@@ -8,8 +8,13 @@
     "campaign_key",
     "config_hash",
     "stable_identity_hash",
+    "idempotency_key",
+    "intended_destinations",
+    "external_receipts",
+    "readbacks",
     "terminal_outcome",
-    "reconciliation_required"
+    "reconciliation_required",
+    "reconciliation_owner"
   ],
   "properties": {
     "workflow_id": {"type": "string", "pattern": "^wf_"},
@@ -20,12 +25,16 @@
     "config_hash": {"type": "string", "minLength": 1},
     "ai_context_hash": {"type": ["string", "null"]},
     "stable_identity_hash": {"type": "string", "minLength": 1},
+    "idempotency_key": {"type": "string", "minLength": 1},
     "eligibility_status": {"type": ["string", "null"]},
     "suppression_status": {"type": ["string", "null"]},
     "approval_references": {"type": "object"},
-    "intended_destinations": {"type": "object"},
+    "intended_destinations": {"type": "object", "minProperties": 1},
     "external_receipts": {"type": "object"},
     "readbacks": {"type": "object"},
+    "side_effect_state": {
+      "enum": ["none", "not_submitted", "submitted_unknown", "partially_written", "written", "verified"]
+    },
     "credits_spent": {"type": ["number", "null"], "minimum": 0},
     "terminal_outcome": {
       "enum": [

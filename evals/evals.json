@@ -95,6 +95,54 @@
       ]
     },
     {
+      "id": "approval-hash-drift",
+      "prompt": "The campaign was approved, but its budget and destination mappings changed afterward. Is the approval still valid?",
+      "files": ["fixtures/stale-approved-manifest.json"],
+      "expected_output": "Recompute the normalized configuration hash and block paid work or writes when it differs from the approval hash.",
+      "assertions": [
+        "Excludes approval evidence itself from the normalized configuration hash",
+        "Invalidates approval after a configuration change",
+        "Does not run paid work or external writes",
+        "Requests a new scoped and expiring approval"
+      ]
+    },
+    {
+      "id": "unsafe-write-controls",
+      "prompt": "Audit this outbound graph for payload completeness and launch controls.",
+      "files": ["fixtures/unsafe-governed-graph.json", "fixtures/valid-campaign-manifest.json"],
+      "expected_output": "DRAFT_BLOCKED for missing required payload fields, idempotency, suppression, downstream readback, and terminal outcome.",
+      "assertions": [
+        "Names the missing destination payload fields",
+        "Finds the write without a downstream readback",
+        "Finds missing idempotency and suppression controls",
+        "Finds the non-terminal graph leaf"
+      ]
+    },
+    {
+      "id": "duplicate-rerun-receipts",
+      "prompt": "These two runs used the same campaign and person identity. Did the rerun duplicate activation?",
+      "files": ["fixtures/duplicate-reconciliation-receipts.json"],
+      "expected_output": "Block scaling because one idempotency key produced two distinct activated destination receipts.",
+      "assertions": [
+        "Groups receipts by idempotency key",
+        "Distinguishes a repeated observation from two distinct activations",
+        "Returns a blocker for duplicate activation",
+        "Does not retry or delete destination records"
+      ]
+    },
+    {
+      "id": "ambiguous-timeout-after-write",
+      "prompt": "The sequencer request timed out after submission. Can we retry this person?",
+      "files": ["fixtures/ambiguous-timeout-receipt.json"],
+      "expected_output": "Treat the side effect as unknown and require an exact destination readback before retry.",
+      "assertions": [
+        "Preserves submitted_unknown side-effect state",
+        "Requires a readback of the exact person and campaign",
+        "Does not blindly retry",
+        "Keeps readiness below LIVE_READY"
+      ]
+    },
+    {
       "id": "plain-english-workflow-explanation",
       "prompt": "Explain exactly what this Clay workflow does so a smart person who has never used Clay can understand it.",
       "files": [

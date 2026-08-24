@@ -37,3 +37,8 @@
 - [ ] Published graph is the graph that passed the canary.
 - [ ] Live triggers are intentionally bound and paused/resumed as intended.
 - [ ] Stop conditions and reconciliation owner are recorded.
+- [ ] Business, builder, approver, reconciliation, and incident owners are named.
+- [ ] Trigger pause method and known-good rollback snapshot are recorded.
+- [ ] Downstream remediation owner understands that graph rollback does not undo writes.
+- [ ] Log allowlist, redactions, and evidence/raw-payload retention are recorded.
+- [ ] Evidence/CLI compatibility check passed.

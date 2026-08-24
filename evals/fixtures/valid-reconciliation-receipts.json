@@ -1,0 +1,22 @@
+{
+  "data": [
+    {
+      "workflow_id": "wf_fixture_governed",
+      "workflow_snapshot_id": "snap_fixture_canary",
+      "run_id": "wfr_fixture_canary",
+      "campaign_key": "fixture-campaign",
+      "campaign_version": "1.0",
+      "config_hash": "sha256:fixture",
+      "stable_identity_hash": "person:fixture",
+      "idempotency_key": "fixture-campaign:person:fixture",
+      "approval_references": {"activation": "APPROVAL-1"},
+      "intended_destinations": {"sequencer": "seq_fixture_campaign"},
+      "external_receipts": {"sequencer": {"lead_id": "lead_fixture"}},
+      "readbacks": {"sequencer": {"verified": true, "lead_id": "lead_fixture", "campaign_id": "seq_fixture_campaign"}},
+      "side_effect_state": "verified",
+      "terminal_outcome": "activated_verified",
+      "reconciliation_required": true,
+      "reconciliation_owner": "revenue-operations"
+    }
+  ]
+}

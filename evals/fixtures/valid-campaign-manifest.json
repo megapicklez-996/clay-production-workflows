@@ -2,23 +2,23 @@
   "template": {
     "name": "governed-clay-campaign",
     "version": "1.1.0",
-    "source_workflow_id": "REPLACE_ME",
-    "source_snapshot_id": "REPLACE_ME"
+    "source_workflow_id": "wf_fixture_governed",
+    "source_snapshot_id": "snap_fixture_known_good"
   },
   "campaign": {
-    "key": "REPLACE_ME",
-    "name": "REPLACE_ME",
+    "key": "fixture-campaign",
+    "name": "Fixture Campaign",
     "version": "1.0",
-    "owner": "REPLACE_ME",
+    "owner": "revenue-operations",
     "state": "DRAFT",
     "ready": false
   },
   "sources": {
-    "account_segment_id": "REPLACE_WITH_EMPTY_CONTROL_SEGMENT",
-    "person_queue_segment_id": "REPLACE_WITH_EMPTY_CONTROL_SEGMENT",
-    "entity_type": "ACCOUNT",
-    "expected_count": 0,
-    "count_observed_at": null
+    "account_segment_id": "seg_fixture_control",
+    "person_queue_segment_id": "seg_fixture_people",
+    "entity_type": "CONTACT",
+    "expected_count": 1,
+    "count_observed_at": "2030-01-01T00:00:00Z"
   },
   "eligibility": {
     "account_rules": {},
@@ -37,21 +37,19 @@
   },
   "payload_contract": {
     "destination_fields": {
-      "audience": ["email", "first_name", "last_name", "title", "linkedin_url"],
-      "crm": ["email", "first_name", "last_name", "title", "linkedin_url"],
       "sequencer": ["email", "first_name", "last_name", "title", "linkedin_url", "subject1", "body1"]
     }
   },
   "destinations": {
-    "audience_id": "REPLACE_ME",
-    "crm_campaign_id": "REPLACE_ME",
-    "sequencer_campaign_id": "REPLACE_ME"
+    "audience_id": "seg_fixture_result",
+    "crm_campaign_id": "crm_fixture_campaign",
+    "sequencer_campaign_id": "seq_fixture_campaign"
   },
   "budgets": {
-    "expected_records": 0,
-    "worst_case_credits_per_record": 0,
-    "approved_total_clay_credits": 0,
-    "approved_byoa_cost_usd": 0
+    "expected_records": 1,
+    "worst_case_credits_per_record": 2,
+    "approved_total_clay_credits": 2,
+    "approved_byoa_cost_usd": 1
   },
   "approvals": {
     "config_hash": "",
@@ -67,31 +65,31 @@
     "outbound_activation": false
   },
   "ownership": {
-    "business_owner": "REPLACE_ME",
-    "builder": "REPLACE_ME",
-    "approver": "REPLACE_ME",
-    "reconciliation_owner": "REPLACE_ME",
-    "incident_owner": "REPLACE_ME"
+    "business_owner": "revenue-operations",
+    "builder": "automation-engineering",
+    "approver": "growth-lead",
+    "reconciliation_owner": "revenue-operations",
+    "incident_owner": "automation-on-call"
   },
   "operations": {
     "kill_switch": {
-      "owner": "REPLACE_ME",
-      "trigger_ids": [],
-      "pause_method": "REPLACE_ME",
-      "rollback_snapshot_id": "REPLACE_ME",
-      "downstream_remediation_owner": "REPLACE_ME"
+      "owner": "automation-on-call",
+      "trigger_ids": ["trg_fixture"],
+      "pause_method": "disable audience trigger",
+      "rollback_snapshot_id": "snap_fixture_known_good",
+      "downstream_remediation_owner": "revenue-operations"
     }
   },
   "data_handling": {
     "classification": "CONFIDENTIAL",
-    "allowed_log_fields": ["workflow_id", "run_id", "campaign_key", "terminal_outcome", "stop_reason"],
-    "redacted_fields": ["email", "phone", "message_body", "provider_payload", "credentials"],
+    "allowed_log_fields": ["workflow_id", "run_id", "campaign_key", "terminal_outcome"],
+    "redacted_fields": ["email", "phone", "message_body", "credentials"],
     "evidence_retention_days": 30,
     "raw_payload_retention_days": 0
   },
   "reconciliation": {
-    "owner": "REPLACE_ME",
-    "required_readbacks": ["audience", "crm", "sequencer"],
+    "owner": "revenue-operations",
+    "required_readbacks": ["sequencer"],
     "success_outcome": "activated_verified"
   }
 }
