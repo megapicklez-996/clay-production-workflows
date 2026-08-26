@@ -22,6 +22,18 @@ def fixture(name):
     return json.loads((ROOT / "evals" / "fixtures" / name).read_text(encoding="utf-8"))
 
 
+class PackageTests(unittest.TestCase):
+    def test_eval_file_references_exist(self):
+        evals = json.loads((ROOT / "evals" / "evals.json").read_text(encoding="utf-8"))
+        missing = [
+            relative
+            for case in evals["evals"]
+            for relative in case.get("files", [])
+            if not (ROOT / "evals" / relative).is_file()
+        ]
+        self.assertEqual(missing, [])
+
+
 class ContractTests(unittest.TestCase):
     def test_valid_five_email_contract(self):
         result = analyze(fixture("valid-production-workflow.json"), {"valid": True})

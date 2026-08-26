@@ -1,6 +1,6 @@
 interface:
   display_name: "Clay Production Workflows"
-  short_description: "Build, explain, and audit Clay workflows"
+  short_description: "Build, visualize, and audit Clay workflows"
   default_prompt: "Use $clay-production-workflows to explain this workflow in plain English and identify what its evidence actually proves."
 policy:
   allow_implicit_invocation: true

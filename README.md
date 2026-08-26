@@ -64,6 +64,12 @@ exact field names, filter operators, configured values, approval gates, and writ
 ```
 
 ```text
+Turn this Mermaid diagram of a governed Clay outbound workflow into a visualization
+here. Preserve every stage, labeled branch, suppression path, destination, and the
+final paused state.
+```
+
+```text
 Audit this Clay workflow for launch readiness. Check semantic contracts, spend
 ceilings, suppression, idempotency, payload completeness, and downstream readbacks.
 Do not mutate or run anything.
@@ -118,6 +124,8 @@ Depending on the request, the agent should produce one or more of these artifact
 
 - A connected plain-English story following one record from entry to terminal
   outcome.
+- A faithful in-conversation visualization of a supplied Mermaid workflow, including
+  its gates, stop paths, stage boundaries, destinations, and evidence caveat.
 - An exact inventory of fields, normalized keys, allowed values, include and
   exclude terms, comparison operators, accepted statuses, TTLs, and tool mappings.
 - A structural and semantic audit with blockers separated from warnings.
@@ -236,14 +244,16 @@ safe way to see the expected level of detail.
 | --- | --- |
 | `SKILL.md` | Routing, operating modes, safety boundaries, and the production methodology |
 | `scripts/` | Read-only evidence collection, manifest/graph/receipt/compatibility validation, run classification, auditing, and explanation |
-| `references/` | Architecture, testing, reconciliation, operations, data handling, failure handling, template instantiation, and explainer guidance |
+| `references/` | Architecture, testing, reconciliation, operations, data handling, failure handling, template instantiation, explainer guidance, and workflow-visualization guidance |
 | `assets/` | Campaign manifest, audit report, launch checklist, parity matrix, reconciliation schema, and explainer templates |
 | `evals/` | Trigger queries, synthetic workflow fixtures, failures, and expected results |
 | `tests/` | Offline unit tests for the bundled tools |
 
 Start with [`SKILL.md`](SKILL.md). For the complete workflow model, read
 [`architecture.md`](references/architecture.md). For human-readable walkthroughs,
-read [`plain-english-explainer.md`](references/plain-english-explainer.md).
+read [`plain-english-explainer.md`](references/plain-english-explainer.md). For
+Mermaid-to-conversation rendering, read
+[`workflow-visualization.md`](references/workflow-visualization.md).
 
 ## Safety boundaries
 

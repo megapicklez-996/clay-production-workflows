@@ -161,6 +161,24 @@
         "Does not treat completed status as destination success",
         "Ends with the exact next verification"
       ]
+    },
+    {
+      "id": "mermaid-workflow-visualization",
+      "prompt": "Turn this Mermaid diagram of a governed Clay outbound workflow into a visualization here. It has six ordered subgraphs, labeled yes/no gates, separate account/person/copy stop paths, three destination writes that converge on reconciliation, and a final Instantly-remains-paused state.",
+      "files": [
+        "fixtures/governed-outbound-flow.mmd"
+      ],
+      "expected_output": "A native in-conversation visualization that faithfully preserves the supplied workflow structure and labels while identifying it as an unverified design rather than observed behavior.",
+      "assertions": [
+        "Uses the host's native in-conversation visualization capability when available",
+        "Does not merely echo the Mermaid source or create a standalone website",
+        "Preserves every stage, node, labeled edge, convergence, and terminal outcome",
+        "Keeps the main eligible path visually continuous and every fail-closed branch visible",
+        "Preserves exact thresholds, time windows, campaign IDs, sequence length, and destination names",
+        "Pairs category color with node shape or text and remains keyboard accessible",
+        "States that Mermaid represents supplied intent, not proof of enforcement or execution",
+        "Does not mutate, test, publish, activate, or write to any destination"
+      ]
     }
   ]
 }

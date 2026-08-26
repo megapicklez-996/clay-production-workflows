@@ -16,6 +16,7 @@
   {"query":"Write a kill-switch, rollback, ownership, and data-retention plan for this live Clay workflow.","should_trigger":true,"split":"validation"},
   {"query":"We need multiple people per company and proof that every person was processed.","should_trigger":true,"split":"validation"},
   {"query":"Explain this Clay workflow in normal language so a new teammate understands every important stage.","should_trigger":true,"split":"validation"},
+  {"query":"Turn this Mermaid diagram of our Clay outbound workflow into a visualization here.","should_trigger":true,"split":"validation"},
   {"query":"What does this existing Clay table do?","should_trigger":false,"split":"train"},
   {"query":"Count companies in this Clay Audience.","should_trigger":false,"split":"train"},
   {"query":"Find verified work emails for these ten people.","should_trigger":false,"split":"train"},
@@ -24,5 +25,6 @@
   {"query":"Which Clay enrichment provider is cheapest for mobile phones?","should_trigger":false,"split":"validation"},
   {"query":"What does the word enrichment mean in Clay?","should_trigger":false,"split":"train"},
   {"query":"Export the rows from this Clay table.","should_trigger":false,"split":"validation"},
-  {"query":"Draft a two-email outbound sequence.","should_trigger":false,"split":"validation"}
+  {"query":"Draft a two-email outbound sequence.","should_trigger":false,"split":"validation"},
+  {"query":"Turn this Mermaid org chart into a visualization here.","should_trigger":false,"split":"validation"}
 ]

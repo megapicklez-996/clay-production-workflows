@@ -1,9 +1,9 @@
 ---
 name: clay-production-workflows
-description: Build, migrate, explain, audit, test, and launch-gate multi-node Clay Workflows that enrich accounts or people and may write to Audiences, a CRM, or a sequencer. Use for plain-English walkthroughs of production workflows, production hardening, parity migrations, reusable campaign templates, bounded canaries, semantic contract checks, cost and approval gates, payload completeness, idempotency, and downstream reconciliation. Do not use for simple table explanations, one-off enrichment questions, or read-only audience counts.
+description: Build, migrate, explain, visualize, audit, test, and launch-gate multi-node Clay Workflows that enrich accounts or people and may write to Audiences, a CRM, or a sequencer. Use for plain-English walkthroughs and in-conversation visualizations of governed workflow diagrams, production hardening, parity migrations, reusable campaign templates, bounded canaries, semantic contract checks, cost and approval gates, payload completeness, idempotency, and downstream reconciliation. Do not use for simple table explanations, one-off enrichment questions, generic non-Clay diagrams, or read-only audience counts.
 metadata:
   author: orchid-automation
-  version: "0.5.0"
+  version: "0.6.0"
 ---
 
 # Clay Production Workflows
@@ -49,6 +49,10 @@ and network access. Fixture analysis and semantic checks work without Clay acces
 5. **Explain in plain English** — turn the graph and available run evidence into a
    noob-friendly operating story without mistaking labels for enforced behavior.
    Read [plain-english-explainer.md](references/plain-english-explainer.md).
+6. **Visualize a supplied workflow diagram** — turn a Mermaid flowchart for a Clay
+   production workflow into a faithful in-conversation visual without dropping
+   gates, stop paths, stage boundaries, or evidence caveats. Read
+   [workflow-visualization.md](references/workflow-visualization.md).
 
 ## Read-only evidence collection
 
@@ -84,6 +88,12 @@ Explain the workflow for a non-technical reader:
 ```bash
 python3 scripts/explain_workflow.py EVIDENCE_DIR --audience general
 ```
+
+When the user supplies Mermaid and asks to see the workflow as a visualization in
+the conversation, treat the Mermaid as the source diagram and follow
+[workflow-visualization.md](references/workflow-visualization.md). Use the host's
+native in-conversation visualization capability when it is available. Do not turn
+that request into a standalone website or silently return the same Mermaid source.
 
 Read [script-contracts.md](references/script-contracts.md) before modifying or
 replacing these scripts. Structured data goes to stdout; diagnostics go to stderr.
