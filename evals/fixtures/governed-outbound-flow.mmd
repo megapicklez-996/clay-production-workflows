@@ -1,0 +1,104 @@
+flowchart TB
+    subgraph SOURCES["1 · ACCOUNT SOURCES"]
+        CRM["CRM-qualified accounts<br/>Existing CRM lane"]
+        NEW["Clay net-new companies<br/>US · 250–5,000 employees · approved industries"]
+    end
+
+    CRM --> RELEASE
+    NEW --> RELEASE
+    RELEASE{"Campaign-specific<br/>release control enabled?"}
+    RELEASE -- No --> HOLD["Hold for review"]
+    RELEASE -- Yes --> SUPPRESS
+
+    subgraph ACCOUNT["2 · COMPANY QUALIFICATION"]
+        SUPPRESS{"Customer, open opportunity,<br/>domain and qualification checks pass?"}
+        EVENT["Scoped event-motion research<br/>Public evidence only"]
+        TIER{"Event evidence tier"}
+    end
+
+    SUPPRESS -- No --> STOP_ACCOUNT["Suppress company"]
+    SUPPRESS -- Yes --> EVENT
+    EVENT --> TIER
+    TIER -- "Tier 1 · strong signal" --> CRMPEOPLE
+    TIER -- "Tier 2 · general evidence" --> CRMPEOPLE
+    TIER -- "No reliable evidence" --> STOP_ACCOUNT
+
+    subgraph PEOPLE["3 · PERSON DISCOVERY"]
+        CRMPEOPLE["Check existing CRM contacts"]
+        EXISTING{"Qualified CRM contact found?"}
+        FIND["Find current people at company<br/>Broad title discovery"]
+        TITLE["AI-assisted title normalization<br/>Manager+ field/event persona fit"]
+        ONE["Select maximum one person<br/>per company"]
+    end
+
+    CRMPEOPLE --> EXISTING
+    EXISTING -- Yes --> ONE
+    EXISTING -- No --> FIND
+    FIND --> TITLE
+    TITLE -- Pass --> ONE
+    TITLE -- Fail --> STOP_PERSON["Suppress person"]
+
+    subgraph VERIFY["4 · IDENTITY & DELIVERABILITY"]
+        ID["Verify person identity,<br/>profile and current employer"]
+        EMAIL["Find work email if needed"]
+        VALIDATE["Validate email deliverability"]
+        HISTORY["Check sequencer workspace history"]
+        WINDOW{"Safe for this campaign?<br/>No unsafe status, reply or contact ≤90 days"}
+    end
+
+    ONE --> ID
+    ID -- Unverified --> STOP_PERSON
+    ID -- Verified --> EMAIL
+    EMAIL --> VALIDATE
+    VALIDATE -- Unsafe / unknown --> STOP_PERSON
+    VALIDATE -- Deliverable --> HISTORY
+    HISTORY --> WINDOW
+    WINDOW -- No --> STOP_PERSON
+    WINDOW -- Yes --> COPY
+
+    subgraph MESSAGING["5 · PERSONALIZED FIVE-EMAIL COPY"]
+        COPY["Generate five-email sequence<br/>Using approved campaign messaging"]
+        REPAIR["Repair once if required"]
+        QA["AI QA + deterministic validators"]
+        READY{"Copy and payload complete?"}
+    end
+
+    COPY --> QA
+    QA -- Needs repair --> REPAIR
+    REPAIR --> QA
+    QA -- Pass --> READY
+    QA -- Fail --> STOP_COPY["Hold copy for review"]
+    READY -- No --> STOP_COPY
+    READY -- Yes --> WRITES
+
+    subgraph DESTINATIONS["6 · GOVERNED DESTINATIONS"]
+        WRITES["Create or fill missing<br/>CRM contact data"]
+        CRM1["Campaign member<br/>CAMPAIGN_ALPHA"]
+        CRM2["Campaign member<br/>CAMPAIGN_BETA"]
+        SEQUENCER["Add lead + five custom emails<br/>to sequencer campaign"]
+        RECEIPT["Read-back and reconciliation receipts"]
+    end
+
+    WRITES --> CRM1
+    WRITES --> CRM2
+    WRITES --> SEQUENCER
+    CRM1 --> RECEIPT
+    CRM2 --> RECEIPT
+    SEQUENCER --> RECEIPT
+    RECEIPT --> PAUSED["SEQUENCER REMAINS PAUSED<br/>No emails are sent"]
+
+    classDef source fill:#E8F1FF,stroke:#3976D3,color:#14213D,stroke-width:1.5px;
+    classDef gate fill:#FFF3CD,stroke:#D39E00,color:#3B2F00,stroke-width:1.5px;
+    classDef process fill:#E9F7EF,stroke:#2E8B57,color:#123524,stroke-width:1.5px;
+    classDef ai fill:#F1E8FF,stroke:#7B4BC4,color:#2D174D,stroke-width:1.5px;
+    classDef stop fill:#FCE8E6,stroke:#C83E4D,color:#5A1820,stroke-width:1.5px;
+    classDef destination fill:#E5F6F8,stroke:#168A98,color:#0C3D43,stroke-width:1.5px;
+    classDef safety fill:#DFF5E5,stroke:#1F8F4E,color:#103C24,stroke-width:2px;
+
+    class CRM,NEW source;
+    class RELEASE,SUPPRESS,TIER,EXISTING,WINDOW,READY gate;
+    class EVENT,CRMPEOPLE,FIND,ONE,ID,EMAIL,VALIDATE,HISTORY,WRITES process;
+    class TITLE,COPY,REPAIR,QA ai;
+    class HOLD,STOP_ACCOUNT,STOP_PERSON,STOP_COPY stop;
+    class CRM1,CRM2,SEQUENCER,RECEIPT destination;
+    class PAUSED safety;
