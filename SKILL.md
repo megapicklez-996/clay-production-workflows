@@ -29,6 +29,24 @@ and network access. Fixture analysis and semantic checks work without Clay acces
   action and scope.
 - A request to audit or design does not authorize mutation.
 
+## Pair with the Clay plugin
+
+When the Clay plugin is available, use its `clay` entry-point skill to select the
+right product surface and its focused skills for live mechanics. This skill does
+not replace those instructions: it adds production contracts, approvals, evidence,
+and launch criteria around multi-node Workflows.
+
+For builds and edits, use the plugin's workflow skills to discover current actions
+and schemas, mutate the graph, validate structure, inspect runs, manage snapshots,
+and distinguish draft from published behavior. Apply this skill before graph work
+to define the canonical contract, during the build to preserve its invariants, and
+afterward to audit semantics, bound testing, reconcile writes, and issue readiness.
+
+Read [clay-plugin-integration.md](references/clay-plugin-integration.md) when routing
+a mixed Clay request, combining plugin skills during a production Workflow task, or
+deciding which layer owns a check. If the plugin is absent, keep using offline
+fixtures and semantic checks; do not invent live CLI shapes or claim workspace proof.
+
 ## Choose the operating mode
 
 1. **Audit an existing workflow** — collect read-only evidence, validate the graph,

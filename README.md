@@ -86,6 +86,21 @@ The skill deliberately separates:
 - what executable configuration actually enforces;
 - what run evidence and destination readbacks prove happened.
 
+## Use it with the Clay plugin
+
+The Clay plugin and this skill serve different layers of the same job. The plugin
+routes work across Audiences, Search, Routines, Tables, and Workflows and provides
+the current CLI mechanics for reading data, discovering actions, editing graphs,
+testing, publishing, and snapshots. This skill adds the production contract around
+a multi-node Workflow: approval binding, semantic consistency, bounded canaries,
+idempotency, terminal outcomes, and destination reconciliation.
+
+Use the plugin alone for ordinary Audience questions, net-new searches, routine
+runs, and table diagnosis. Add this skill when a Workflow can spend materially,
+write to another system, activate outreach, run unattended, or scale. See
+[`clay-plugin-integration.md`](references/clay-plugin-integration.md) for the full
+responsibility split and handoff sequence.
+
 ## Install
 
 Install with the [skills CLI](https://skills.sh):
