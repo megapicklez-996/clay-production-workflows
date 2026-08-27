@@ -2,18 +2,41 @@
 
 Most Clay workflows are easy to demo and hard to operate.
 
-A graph can validate while still sending the wrong records, spending more credits
-than expected, producing a two-email sequence for a five-email campaign, or writing
-to Salesforce and Instantly without proving either write landed.
+A graph can validate while still routing the wrong owner, spending more credits than
+expected, overwriting the wrong CRM field, producing a two-email sequence for a
+five-email campaign, or claiming success without proving a downstream postcondition.
 
 This skill gives an agent a production methodology for finding those gaps. It can
 explain an existing workflow in plain English, audit the real configuration, harden
 a build, test it with a bounded canary, and decide whether it is actually ready to
-launch.
+launch. It applies to enrichment, research, inbound routing, CRM and Audience sync,
+and outbound campaigns without forcing every workflow into the campaign shape.
 
-## The workflow it helps you build
+## How applicability works
 
-Imagine one account entering a campaign.
+Every in-scope workflow receives the same production reasoning kernel: separate
+intent from executable enforcement and observed proof; bind approval to configuration;
+bound cost and tests; preserve stable identity and context; define terminal outcomes;
+and make missing evidence explicit.
+
+Additional profiles activate from declared intent plus executable signals:
+
+- paid enrichment activates budget, cache, fallback, freshness, and value-validation rules;
+- routing activates precedence, fallback-owner, deduplication, reason, and SLA rules;
+- CRM or Audience mutation activates stewardship, idempotency, payload, and readback rules;
+- copy or sequencer activation activates exact sequence, suppression, enrollment, and
+  activation-verification rules;
+- Audience triggers activate cohort fingerprinting and trigger-cutover checks.
+
+Profiles compose. Irrelevant checks are reported as `NOT_APPLICABLE`, while detected
+capabilities can add safeguards even when the manifest forgot to declare them. See
+[`applicability-and-profiles.md`](references/applicability-and-profiles.md).
+
+## One outbound example
+
+Imagine one account entering an outbound campaign. The same universal kernel applies
+to other workflow types, but the copy, suppression, and sequencer rules below activate
+only because this example has those capabilities.
 
 The account should not move forward because a node is called “Qualified.” The
 workflow needs to inspect the actual fields. In the synthetic example bundled with
@@ -52,7 +75,7 @@ Instantly. After each write, the workflow reads the destination back. A Clay run
 marked `completed` is not treated as business success until the intended record,
 campaign membership, and sequencer state are independently verified.
 
-That full journey is what this skill means by a production workflow.
+That full journey is one example of what this skill means by a production workflow.
 
 ## What you can ask an agent
 
@@ -79,6 +102,16 @@ Do not mutate or run anything.
 Turn this working Clay campaign into a reusable template. Identify every source,
 destination ID, filter value, cache TTL, copy requirement, and approval that must
 be rebound or invalidated.
+```
+
+```text
+Audit this inbound lead-routing workflow. Prove every eligible record reaches exactly
+one owner or review queue, then verify the final CRM owner after the write.
+```
+
+```text
+Production-harden this company enrichment workflow. Check cache precedence, worst-case
+credits, usable-value validation, fallbacks, and its bounded-run evidence.
 ```
 
 ```text
@@ -133,6 +166,19 @@ The repository keeps `SKILL.md` at its root, so the skills CLI discovers the
 skill directly and installs its scripts, references, assets, evaluations, and tests
 together.
 
+## Agent Skills design
+
+The package follows the [Agent Skills specification](https://agentskills.io/specification)
+and its guidance on [progressive disclosure and focused references](https://agentskills.io/skill-creation/best-practices).
+Its frontmatter description contains both positive and negative trigger conditions;
+`SKILL.md` routes every production request through the universal kernel, then opens
+only the matching profile references. Deterministic classification and audits live in
+scripts, while `evals/trigger-queries.json` includes should-trigger and should-not-
+trigger train/validation cases following the [evaluation guidance](https://agentskills.io/skill-creation/evaluating-skills).
+
+CI validates the package with `skills-ref`, verifies skills CLI discovery, and runs
+the offline regression suite.
+
 ## What the agent returns
 
 Depending on the request, the agent should produce one or more of these artifacts:
@@ -149,7 +195,7 @@ Depending on the request, the agent should produce one or more of these artifact
 - A bounded test ladder with credit limits, record limits, stop conditions, and
   approval scope.
 - A reconciliation plan showing how every external write will be read back.
-- A reusable campaign manifest or parity matrix for a migration or template.
+- A reusable workflow contract, applicable profile extensions, or parity matrix.
 - A deterministic manifest hash and approval-drift report.
 - A graph-control report covering destination payloads, idempotency, suppression,
   terminal outcomes, and downstream readbacks.
@@ -161,10 +207,11 @@ Depending on the request, the agent should produce one or more of these artifact
 - A reconciliation audit for duplicate activation and ambiguous partial writes.
 - An evidence-compatibility verdict tied to the collector contract and Clay CLI version.
 
-`LIVE_READY` has a deliberately high bar. It requires a real canary that reached
-every intended destination and was independently read back, a consistent produced-
-output trace, and proven raw-snapshot and trigger-safety coverage. Static graph
-inspection cannot prove it.
+`LIVE_READY` has a deliberately high bar. It requires a real canary that proved its
+declared terminal outcome and every applicable postcondition, plus a consistent
+produced-output trace and raw-snapshot evidence. Destination readbacks are mandatory
+for external mutations; trigger-overlap proof is mandatory for Audience-driven flows.
+Static graph inspection cannot prove it.
 
 ## Audit a live workflow
 
@@ -183,7 +230,7 @@ Collect a read-only evidence bundle:
 ```bash
 python3 scripts/collect_workflow_evidence.py WORKFLOW_ID \
   --output .clay-evidence/WORKFLOW_ID \
-  --manifest campaign-manifest.json \
+  --manifest workflow-contract.json \
   --receipts reconciliation-receipts.json \
   --trace-run BOUNDED_CANARY_RUN_ID
 ```
@@ -197,6 +244,10 @@ test, resume, or mutate the workflow.
 Run the audit:
 
 ```bash
+python3 scripts/classify_workflow.py .clay-evidence/WORKFLOW_ID/graph.json \
+  --manifest .clay-evidence/WORKFLOW_ID/manifest.json \
+  --triggers .clay-evidence/WORKFLOW_ID/triggers.json
+
 python3 scripts/validate_contract.py .clay-evidence/WORKFLOW_ID/graph.json \
   --validation .clay-evidence/WORKFLOW_ID/validation.json
 
@@ -230,6 +281,10 @@ python3 scripts/summarize_runs.py .clay-evidence/WORKFLOW_ID/runs.json \
 
 python3 scripts/audit_workflow.py .clay-evidence/WORKFLOW_ID
 ```
+
+Use the classifier or aggregate audit to decide which individual conditional checks
+apply. Sequence, Audience-trigger, and destination-reconciliation checks should not be
+treated as universal requirements.
 
 Generate the story-first explanation:
 

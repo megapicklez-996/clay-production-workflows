@@ -12,7 +12,7 @@
 
 ## Evidence coverage
 
-| Control | PROVEN / FAILED / NOT_CHECKED / UNKNOWN | Evidence |
+| Control | PROVEN / FAILED / NOT_CHECKED / UNKNOWN / NOT_APPLICABLE | Evidence |
 |---|---|---|
 
 ## Raw snapshot and trigger safety
@@ -26,6 +26,8 @@
 
 ## Workflow shape
 
+- Primary profile and composed profiles:
+- Declared / detected / effective capabilities:
 - Triggers:
 - Nodes and edges:
 - Paid actions:

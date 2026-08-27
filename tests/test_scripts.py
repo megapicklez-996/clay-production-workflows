@@ -10,7 +10,10 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from audit_workflow import audit
 from analyze_run_traces import analyze_run_traces
-from collect_workflow_evidence import audience_summary, compact_run_trace, function_fingerprint
+from classify_workflow import classify_workflow
+from collect_workflow_evidence import (
+    audience_summary, compact_run_trace, declared_trace_fields, function_fingerprint,
+)
 from explain_workflow import build_model, render_markdown
 from summarize_runs import classify_error, summarize
 from validate_contract import analyze
@@ -36,6 +39,22 @@ class PackageTests(unittest.TestCase):
             if not (ROOT / "evals" / relative).is_file()
         ]
         self.assertEqual(missing, [])
+
+    def test_trigger_queries_cover_positive_and_negative_train_validation_sets(self):
+        queries = json.loads(
+            (ROOT / "evals" / "trigger-queries.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(len({row["query"] for row in queries}), len(queries))
+        coverage = {
+            (row.get("split"), row.get("should_trigger")) for row in queries
+        }
+        self.assertEqual(
+            coverage,
+            {
+                ("train", True), ("train", False),
+                ("validation", True), ("validation", False),
+            },
+        )
 
 
 class ContractTests(unittest.TestCase):
@@ -65,7 +84,7 @@ class ManifestTests(unittest.TestCase):
             "config_hash": configuration_hash(manifest),
             "reference": "APPROVAL-1",
             "approver": "growth-lead",
-            "approved_at": "2030-01-01T00:00:00Z",
+            "approved_at": "2025-01-01T00:00:00Z",
             "expires_at": "2099-01-01T00:00:00Z",
         })
         self.assertTrue(analyze_manifest(manifest)["valid"])
@@ -73,6 +92,34 @@ class ManifestTests(unittest.TestCase):
         result = analyze_manifest(manifest)
         self.assertFalse(result["valid"])
         self.assertIn("approval_config_hash_mismatch", {item["code"] for item in result["findings"]})
+
+    def test_enrichment_profile_does_not_require_campaign_or_copy_sections(self):
+        result = analyze_manifest(fixture("valid-enrichment-manifest.json"))
+        self.assertTrue(result["valid"], result["findings"])
+        self.assertEqual(result["profile"], "enrichment_sync")
+        self.assertNotIn("copy_sequence", result["capabilities"])
+
+    def test_capability_implications_cannot_hide_external_mutation_controls(self):
+        manifest = fixture("valid-enrichment-manifest.json")
+        manifest["workflow_contract"]["capabilities"] = ["crm_sync"]
+        result = analyze_manifest(manifest)
+        self.assertIn("external_mutation", result["capabilities"])
+        missing = {
+            item.get("section")
+            for item in result["findings"]
+            if item["code"] == "manifest_section_missing"
+        }
+        self.assertIn("payload_contract", missing)
+        self.assertIn("reconciliation", missing)
+
+    def test_sensitive_monotonic_evidence_field_is_rejected(self):
+        manifest = fixture("valid-enrichment-manifest.json")
+        manifest["workflow_contract"]["monotonic_evidence_fields"] = ["email_verified"]
+        result = analyze_manifest(manifest)
+        self.assertIn(
+            "monotonic_evidence_fields_unsafe",
+            {item["code"] for item in result["findings"]},
+        )
 
     def test_template_placeholders_block_instantiation(self):
         template = json.loads((ROOT / "assets" / "campaign-manifest.template.json").read_text())
@@ -90,7 +137,7 @@ class ManifestTests(unittest.TestCase):
             "config_hash": configuration_hash(manifest),
             "reference": "APPROVAL-OPS-1",
             "approver": "growth-lead",
-            "approved_at": "2030-01-01T00:00:00Z",
+            "approved_at": "2025-01-01T00:00:00Z",
             "expires_at": "2099-01-01T00:00:00Z",
         })
         result = analyze_manifest(manifest)
@@ -103,11 +150,57 @@ class ManifestTests(unittest.TestCase):
     def test_live_ready_requires_configured_destination_and_activation_approvals(self):
         manifest = copy.deepcopy(fixture("valid-campaign-manifest.json"))
         manifest["campaign"].update({"state": "LIVE_READY", "ready": True})
+        manifest["workflow_contract"].update({"state": "LIVE_READY", "ready": True})
         result = analyze_manifest(manifest)
         codes = {item["code"] for item in result["findings"]}
         self.assertFalse(result["valid"])
         self.assertIn("live_ready_destination_approvals_missing", codes)
         self.assertIn("live_ready_outbound_activation_approval_missing", codes)
+
+
+class ApplicabilityTests(unittest.TestCase):
+    def test_enrichment_routes_only_relevant_profile_checks(self):
+        result = classify_workflow(
+            fixture("enrichment-only-workflow.json"),
+            fixture("valid-enrichment-manifest.json"),
+        )
+        self.assertTrue(result["valid"], result["findings"])
+        self.assertEqual(result["primary_profile"], "enrichment_sync")
+        self.assertIn("credit_budget", result["applicable_checks"])
+        self.assertIn("sequence_contract", result["not_applicable_checks"])
+        self.assertIn("trigger_overlap", result["not_applicable_checks"])
+
+    def test_inbound_crm_graph_composes_routing_and_sync_profiles(self):
+        result = classify_workflow(fixture("inbound-routing-workflow.json"))
+        self.assertTrue(result["valid"], result["findings"])
+        self.assertIn("inbound_routing", result["profiles"])
+        self.assertIn("crm_sync", result["profiles"])
+        self.assertIn("assignment_contract", result["applicable_checks"])
+        self.assertIn("destination_reconciliation", result["applicable_checks"])
+        self.assertIn("sequence_contract", result["not_applicable_checks"])
+
+    def test_generic_condition_does_not_imply_business_routing(self):
+        graph = {
+            "nodes": [{
+                "id": "check",
+                "name": "Required Fields Present?",
+                "nodeType": "conditional",
+                "code": "return bool(domain)",
+            }]
+        }
+        result = classify_workflow(graph)
+        self.assertNotIn("routing", result["capabilities"]["detected"])
+        self.assertNotIn("inbound_routing", result["profiles"])
+
+    def test_detected_capability_adds_checks_when_manifest_omits_it(self):
+        manifest = fixture("valid-enrichment-manifest.json")
+        result = classify_workflow(fixture("valid-governed-graph.json"), manifest)
+        self.assertIn("copy_sequence", result["capabilities"]["effective"])
+        self.assertIn("sequence_contract", result["applicable_checks"])
+        self.assertIn(
+            "detected_capability_not_declared",
+            {item["code"] for item in result["findings"]},
+        )
 
 
 class GraphControlTests(unittest.TestCase):
@@ -290,6 +383,20 @@ class RunTraceTests(unittest.TestCase):
             {item["code"] for item in result["findings"]},
         )
 
+    def test_generic_verified_outcome_cannot_be_reclassified_as_failure(self):
+        result = analyze_run_traces({"data": [{
+            "runId": "run_generic",
+            "nodes": [
+                {"name": "Sync", "fields": {"terminal_outcome": "custom_sync_verified"}},
+                {"name": "Final", "fields": {"terminal_outcome": "failed"}},
+            ],
+        }]})
+        self.assertFalse(result["valid"])
+        self.assertIn(
+            "multiple_incompatible_outcome_classes_in_run",
+            {item["code"] for item in result["findings"]},
+        )
+
 
 class CollectorRedactionTests(unittest.TestCase):
     def test_audience_and_function_summaries_hash_sensitive_values(self):
@@ -326,6 +433,16 @@ class CollectorRedactionTests(unittest.TestCase):
         self.assertNotIn("private copy", rendered)
         self.assertTrue(trace["nodes"][0]["fields"]["activation_executed"])
         self.assertNotIn("workflow_outcome", trace["nodes"][0]["fields"])
+
+    def test_declared_monotonic_fields_expand_safely(self):
+        manifest = fixture("valid-enrichment-manifest.json")
+        manifest["workflow_contract"]["monotonic_evidence_fields"].extend([
+            "custom_readback_verified", "email_verified", "api_key_verified",
+        ])
+        allowed = declared_trace_fields(manifest)
+        self.assertIn("custom_readback_verified", allowed)
+        self.assertNotIn("email_verified", allowed)
+        self.assertNotIn("api_key_verified", allowed)
 
 
 class RunSummaryTests(unittest.TestCase):
@@ -396,6 +513,27 @@ class ReconciliationTests(unittest.TestCase):
         self.assertIn("activated_without_external_receipts", codes)
         self.assertIn("readback_destination_mismatch", codes)
 
+    def test_generic_success_outcome_accepts_exact_record_readback(self):
+        payload = {"data": [{
+            "workflow_id": "wf_fixture",
+            "config_hash": "sha256:fixture",
+            "stable_identity_hash": "sha256:company",
+            "idempotency_key": "sync:company",
+            "terminal_outcome": "synced_verified",
+            "reconciliation_required": True,
+            "reconciliation_owner": "revenue-operations",
+            "intended_destinations": {"crm": "003-fixture"},
+            "external_receipts": {"crm": {"request_id": "req-fixture"}},
+            "readbacks": {"crm": {"verified": True, "record_id": "003-fixture"}},
+        }]}
+        result = analyze_reconciliation(
+            payload,
+            allowed_outcomes={"synced_verified"},
+            success_outcomes={"synced_verified"},
+        )
+        self.assertTrue(result["valid"], result["findings"])
+        self.assertTrue(result["live_ready_proven"])
+
 
 def write_evidence(directory, *, graph=None, manifest=None, receipts=None, runs=None, run_traces=None):
     values = {
@@ -464,18 +602,70 @@ class AuditTests(unittest.TestCase):
             self.assertEqual(result["readiness_ceiling"], "DRAFT_BLOCKED")
             self.assertFalse(result["live_ready_proven"])
 
+    def test_enrichment_audit_marks_outbound_checks_not_applicable(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            write_evidence(
+                directory,
+                graph=fixture("enrichment-only-workflow.json"),
+                manifest=fixture("valid-enrichment-manifest.json"),
+            )
+            result = audit(directory)
+            self.assertEqual(result["readiness_ceiling"], "PREVIEW_READY", result)
+            self.assertEqual(result["coverage"]["semantic_contract"], "NOT_APPLICABLE")
+            self.assertEqual(result["coverage"]["trigger_safety"], "NOT_APPLICABLE")
+            self.assertEqual(result["coverage"]["destination_reconciliation"], "NOT_APPLICABLE")
+
+    def test_non_mutating_enrichment_can_reach_live_without_destination_receipts(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            manifest = fixture("valid-enrichment-manifest.json")
+            manifest["workflow_contract"].update({"state": "LIVE_READY", "ready": True})
+            manifest["approvals"].update({
+                "paid_work": True,
+                "publish": True,
+                "config_hash": configuration_hash(manifest),
+                "reference": "APPROVAL-ENRICH-1",
+                "approver": "revenue-operations",
+                "approved_at": "2025-01-01T00:00:00Z",
+                "expires_at": "2099-01-01T00:00:00Z",
+            })
+            write_evidence(
+                directory,
+                graph=fixture("enrichment-only-workflow.json"),
+                manifest=manifest,
+                runs={"data": [{"status": "completed"}]},
+                run_traces={"data": [{
+                    "runId": "wfr_enrichment",
+                    "nodes": [{
+                        "name": "Finalize Verified Enrichment",
+                        "fields": {
+                            "terminal_outcome": "enriched_verified",
+                            "enrichment_verified": True,
+                        },
+                    }],
+                }]},
+            )
+            result = audit(directory)
+            self.assertEqual(result["readiness_ceiling"], "LIVE_READY", result)
+            self.assertEqual(result["coverage"]["destination_reconciliation"], "NOT_APPLICABLE")
+
     def test_verified_canary_and_governance_can_reach_live_ready(self):
         with tempfile.TemporaryDirectory() as raw:
             directory = Path(raw)
             manifest = copy.deepcopy(fixture("valid-campaign-manifest.json"))
             manifest["campaign"].update({"state": "LIVE_READY", "ready": True})
+            manifest["workflow_contract"].update({"state": "LIVE_READY", "ready": True})
             manifest["approvals"].update({
+                "paid_work": True,
+                "copy_generation": True,
+                "publish": True,
                 "sequencer_write": True,
                 "outbound_activation": True,
                 "config_hash": configuration_hash(manifest),
                 "reference": "APPROVAL-LIVE-1",
                 "approver": "growth-lead",
-                "approved_at": "2030-01-01T00:00:00Z",
+                "approved_at": "2025-01-01T00:00:00Z",
                 "expires_at": "2099-01-01T00:00:00Z",
             })
             receipts = copy.deepcopy(fixture("valid-reconciliation-receipts.json"))

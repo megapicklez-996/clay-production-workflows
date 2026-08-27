@@ -16,6 +16,8 @@ from typing import Any
 OUTCOMES = {
     "activated_verified", "already_satisfied", "review_only", "safely_suppressed",
     "provider_failure", "destination_rejection", "reconciliation_failure",
+    "completed_verified", "enriched_verified", "routed_verified", "synced_verified",
+    "review_required", "safely_skipped", "failed",
 }
 
 
@@ -56,6 +58,12 @@ def destination_for(node: dict[str, Any]) -> str | None:
     if any(term in text for term in ("instantly", "smartlead", "outreach", "sequencer", "enroll")):
         return "sequencer"
     return None
+
+
+def mentions_destination(node: dict[str, Any], destination: str) -> bool:
+    text = re.sub(r"[_-]+", " ", own_text(node))
+    expected = re.sub(r"[_-]+", " ", destination.lower()).strip()
+    return bool(expected and expected in text)
 
 
 def action_keys(node: dict[str, Any]) -> list[str]:
@@ -325,9 +333,36 @@ def analyze_graph_controls(
     approvals = (manifest or {}).get("approvals") or {}
     destination_ids = (manifest or {}).get("destinations") or {}
     approval_key = {"audience": "audience_write", "crm": "crm_write", "sequencer": "sequencer_write"}
+    unknown_contract_destinations = {
+        str(destination) for destination in payload_contract if destination not in approval_key
+    }
     for destination, required in payload_contract.items():
-        destination_writes = [node for node in writes if destination_for(node) == destination]
-        if approvals.get(approval_key.get(destination, "")) is True and not destination_writes:
+        destination_kind = destination if destination in approval_key else None
+        destination_writes = [node for node in writes if destination_for(node) == destination_kind]
+        if destination_kind is None:
+            named_writes = [
+                node for node in destination_writes if mentions_destination(node, str(destination))
+            ]
+            if named_writes:
+                destination_writes = named_writes
+            elif len(destination_writes) == 1 and len(unknown_contract_destinations) == 1:
+                add(
+                    findings,
+                    "MEDIUM",
+                    "generic_destination_binding_inferred",
+                    destination=destination,
+                    node=destination_writes[0].get("name"),
+                )
+            else:
+                add(
+                    findings,
+                    "HIGH",
+                    "generic_destination_write_binding_ambiguous",
+                    destination=destination,
+                    candidate_nodes=[node.get("name") for node in destination_writes],
+                )
+                destination_writes = []
+        if approvals.get(approval_key.get(destination, "external_write")) is True and not destination_writes:
             add(findings, "BLOCKER", "approved_destination_write_not_detected", destination=destination)
             continue
         for write in destination_writes:
@@ -459,10 +494,16 @@ def analyze_graph_controls(
                 )
 
     if edges:
+        declared_outcomes = (
+            ((manifest or {}).get("workflow_contract") or {}).get("terminal_outcomes") or []
+        )
+        accepted_outcomes = OUTCOMES | {
+            str(outcome).lower() for outcome in declared_outcomes if isinstance(outcome, str)
+        }
         leaves = [node for node in nodes if node.get("nodeType") != "trigger" and not adjacency.get(str(node.get("id")))]
         for leaf in leaves:
             text = node_text(leaf)
-            if not any(outcome in text for outcome in OUTCOMES):
+            if not any(outcome in text for outcome in accepted_outcomes):
                 add(
                     findings,
                     "HIGH",

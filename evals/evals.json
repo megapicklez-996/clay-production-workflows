@@ -74,6 +74,32 @@
       ]
     },
     {
+      "id": "enrichment-profile-applicability",
+      "prompt": "Audit this paid company-enrichment workflow. It does not send copy or write to a destination.",
+      "files": ["fixtures/enrichment-only-workflow.json", "fixtures/valid-enrichment-manifest.json"],
+      "expected_output": "Apply the universal production kernel and enrichment controls while marking sequence, suppression, trigger-overlap, and destination-reconciliation checks not applicable.",
+      "assertions": [
+        "Applies budget, approval, cache, runtime-outcome, and data-handling controls",
+        "Does not demand a copy sequence or sequencer suppression",
+        "Does not demand Audience trigger evidence",
+        "Marks irrelevant checks NOT_APPLICABLE rather than passed",
+        "Keeps runtime success unproven without a bounded execution trace"
+      ]
+    },
+    {
+      "id": "composed-inbound-crm-profile",
+      "prompt": "Classify and audit this inbound lead-routing workflow that updates a Salesforce owner.",
+      "files": ["fixtures/inbound-routing-workflow.json"],
+      "expected_output": "Compose inbound-routing and CRM-sync controls: deterministic assignment, fallback/SLA coverage, idempotent write approval, and an exact owner readback, without outbound-only requirements.",
+      "assertions": [
+        "Detects both routing and CRM mutation capabilities",
+        "Requires deterministic assignment reason and fallback coverage",
+        "Requires approval, idempotency, payload completeness, and Salesforce readback",
+        "Does not require generated email copy or sequencer suppression",
+        "Does not treat a CRM write response as proof of the owner postcondition"
+      ]
+    },
+    {
       "id": "draft-versus-live-test",
       "prompt": "I edited a published Clay workflow. Test the draft using the Audience segment and confirm the edits work.",
       "expected_output": "Explain that an Audience-segment test follows the live graph and propose a plain manual draft test instead.",

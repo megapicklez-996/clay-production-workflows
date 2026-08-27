@@ -40,7 +40,20 @@ SAFE_TRACE_FIELDS = {
     "audience_person_salesforce_id_sync_executed",
     "campaign_queue_status",
     "external_send_executed",
+    "write_executed",
+    "mutation_executed",
+    "readback_verified",
+    "enrichment_verified",
+    "routing_verified",
+    "sync_verified",
 }
+SAFE_DECLARED_TRACE_FIELD = re.compile(
+    r"^[a-z][a-z0-9_]*(?:_executed|_verified|_pass|_completed|_match)$"
+)
+SENSITIVE_FIELD_TERMS = (
+    "email", "phone", "name", "address", "message", "body", "subject",
+    "credential", "secret", "token", "key", "payload",
+)
 
 
 class CollectError(RuntimeError):
@@ -238,25 +251,39 @@ def function_fingerprint(function_id: str, definition: dict[str, Any]) -> dict[s
     }
 
 
-def safe_trace_fields(value: Any) -> dict[str, Any]:
+def declared_trace_fields(manifest: dict[str, Any] | None) -> set[str]:
+    declared = ((manifest or {}).get("workflow_contract") or {}).get(
+        "monotonic_evidence_fields"
+    ) or []
+    return {
+        field
+        for field in declared
+        if isinstance(field, str)
+        and SAFE_DECLARED_TRACE_FIELD.fullmatch(field)
+        and not any(term in field.lower() for term in SENSITIVE_FIELD_TERMS)
+    }
+
+
+def safe_trace_fields(value: Any, extra_fields: set[str] | None = None) -> dict[str, Any]:
+    allowed = SAFE_TRACE_FIELDS | (extra_fields or set())
     found: dict[str, Any] = {}
     if isinstance(value, dict):
         for key, item in value.items():
-            if key in SAFE_TRACE_FIELDS and (
+            if key in allowed and (
                 isinstance(item, (str, int, float, bool)) or item is None
             ):
                 found[key] = item
         # Only unwrap provider/result containers. Do not recurse through
         # _branchOutputs or inherited context, which can contain stale state.
         for key in ("result", "structuredOutput", "structuredOutputs"):
-            found.update(safe_trace_fields(value.get(key)))
+            found.update(safe_trace_fields(value.get(key), extra_fields))
     elif isinstance(value, list):
         for item in value:
-            found.update(safe_trace_fields(item))
+            found.update(safe_trace_fields(item, extra_fields))
     return found
 
 
-def compact_run_trace(run: dict[str, Any]) -> dict[str, Any]:
+def compact_run_trace(run: dict[str, Any], extra_fields: set[str] | None = None) -> dict[str, Any]:
     nodes = []
     for node in run.get("nodes") or []:
         if not isinstance(node, dict):
@@ -268,7 +295,7 @@ def compact_run_trace(run: dict[str, Any]) -> dict[str, Any]:
             if node.get("output") is not None
             else node.get("result")
         )
-        fields = safe_trace_fields(produced)
+        fields = safe_trace_fields(produced, extra_fields)
         if fields:
             nodes.append(
                 {
@@ -314,7 +341,7 @@ def parse_args() -> argparse.Namespace:
         default=5,
         help="Maximum failed runs to inspect without verbose inputs/outputs (default: 5)",
     )
-    parser.add_argument("--manifest", type=Path, help="Optional local campaign manifest to copy into the evidence bundle")
+    parser.add_argument("--manifest", type=Path, help="Optional local workflow contract to copy into the evidence bundle")
     parser.add_argument("--receipts", type=Path, help="Optional local reconciliation receipts to copy into the evidence bundle")
     parser.add_argument(
         "--trace-run",
@@ -341,6 +368,8 @@ def main() -> int:
         return 3
 
     try:
+        local_manifest = load_local_json(args.manifest) if args.manifest else None
+        extra_trace_fields = declared_trace_fields(local_manifest)
         args.output.mkdir(parents=True, exist_ok=True)
         identity = run_clay(["whoami"])
         workflow = run_clay(["workflows", "get", args.workflow_id])
@@ -389,7 +418,8 @@ def main() -> int:
 
         run_traces = [
             compact_run_trace(
-                run_clay(["workflows", "runs", "get", args.workflow_id, run_id, "--verbose"])
+                run_clay(["workflows", "runs", "get", args.workflow_id, run_id, "--verbose"]),
+                extra_trace_fields,
             )
             for run_id in args.trace_run
         ]
@@ -431,8 +461,8 @@ def main() -> int:
             "failed-runs.json": {"data": failed_runs},
             "run-traces.json": {"data": run_traces},
         }
-        if args.manifest:
-            bundle["manifest.json"] = load_local_json(args.manifest)
+        if local_manifest is not None:
+            bundle["manifest.json"] = local_manifest
         if args.receipts:
             bundle["receipts.json"] = load_local_json(args.receipts)
         for filename, payload in bundle.items():

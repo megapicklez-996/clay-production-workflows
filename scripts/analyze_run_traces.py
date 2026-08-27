@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,19 @@ MONOTONIC_TRUE_FIELDS = (
     "audience_activation_marker_write_executed",
     "audience_company_salesforce_id_sync_executed",
     "audience_person_salesforce_id_sync_executed",
+    "write_executed",
+    "mutation_executed",
+    "readback_verified",
+    "enrichment_verified",
+    "routing_verified",
+    "sync_verified",
 )
+
+
+def is_monotonic_true_field(field: str) -> bool:
+    return field in MONOTONIC_TRUE_FIELDS or bool(
+        re.search(r"(?:_executed|_verified|_pass|_completed|_match)$", field)
+    )
 
 
 def load_json(path: Path) -> Any:
@@ -50,6 +63,10 @@ def outcome_class(value: Any) -> str | None:
         return None
     if "activated" in text or "enrollment_verified" in text:
         return "activated"
+    if any(term in text for term in ("completed_verified", "enriched_verified", "routed_verified", "synced_verified")):
+        return "successful"
+    if text.endswith("_verified"):
+        return "successful"
     if "already" in text and "satisfied" in text:
         return "already_satisfied"
     if "suppress" in text or "no_send" in text:
@@ -58,7 +75,11 @@ def outcome_class(value: Any) -> str | None:
         return "stopped"
     if "review" in text:
         return "review"
+    if "skip" in text:
+        return "safely_skipped"
     if "provider" in text or "destination" in text or "reconciliation" in text:
+        return "failure"
+    if "fail" in text or "error" in text:
         return "failure"
     return "other"
 
@@ -86,7 +107,7 @@ def analyze_run_traces(payload: dict[str, Any]) -> dict[str, Any]:
                 continue
             fields = node_fields(node)
             node_name = str(node.get("name") or node.get("nodeId") or index)
-            for field in MONOTONIC_TRUE_FIELDS:
+            for field in sorted(str(key) for key in fields if is_monotonic_true_field(str(key))):
                 if fields.get(field) is True:
                     seen_true.setdefault(field, node_name)
                 elif fields.get(field) is False and field in seen_true:
@@ -117,9 +138,22 @@ def analyze_run_traces(payload: dict[str, Any]) -> dict[str, Any]:
                 activated=activated,
                 stopped=stopped,
             )
+        successful = [item for item in outcomes if item["class"] == "successful"]
+        if successful and stopped and max(item["index"] for item in stopped) > min(item["index"] for item in successful):
+            add(
+                findings,
+                "BLOCKER",
+                "verified_success_reclassified_as_pre_completion_stop",
+                run_id=run.get("runId"),
+                successful=successful,
+                stopped=stopped,
+            )
         terminal_classes = {
             item["class"] for item in outcomes
-            if item["class"] in {"activated", "already_satisfied", "review", "safely_suppressed", "stopped"}
+            if item["class"] in {
+                "activated", "successful", "already_satisfied", "review",
+                "safely_suppressed", "safely_skipped", "stopped", "failure",
+            }
         }
         if len(terminal_classes) > 1:
             add(

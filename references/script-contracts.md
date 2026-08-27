@@ -16,3 +16,8 @@
 - Raw data goes to an explicit directory; stdout stays compact.
 - Fixture analysis works offline.
 - Add unit tests whenever parsing or severity logic changes.
+- Classifiers return applicable and not-applicable checks explicitly. Conditional
+  validators must use `NOT_APPLICABLE`; absence of an irrelevant feature is not a pass
+  or a failure.
+- Declared capabilities express intent; detected executable capabilities may only add
+  safeguards, never suppress them. Report the drift so the contract can be reconciled.
