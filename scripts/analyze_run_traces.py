@@ -92,7 +92,9 @@ def node_fields(node: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def analyze_run_traces(payload: dict[str, Any]) -> dict[str, Any]:
+def analyze_run_traces(
+    payload: dict[str, Any], declared_outcomes: set[str] | None = None
+) -> dict[str, Any]:
     runs = [run for run in payload.get("data") or [] if isinstance(run, dict)]
     findings: list[dict[str, Any]] = []
     run_summaries: list[dict[str, Any]] = []
@@ -123,8 +125,22 @@ def analyze_run_traces(payload: dict[str, Any]) -> dict[str, Any]:
             outcome = fields.get("workflow_outcome") or fields.get("terminal_outcome")
             category = outcome_class(outcome)
             if category:
+                outcome_value = str(outcome)
+                normalized_declared = {
+                    str(item).strip().lower() for item in declared_outcomes or set()
+                }
+                if declared_outcomes is not None and outcome_value.strip().lower() not in normalized_declared:
+                    add(
+                        findings,
+                        "BLOCKER",
+                        "terminal_outcome_not_declared",
+                        run_id=run.get("runId"),
+                        node=node_name,
+                        outcome=outcome_value,
+                        declared_outcomes=sorted(declared_outcomes),
+                    )
                 outcomes.append(
-                    {"node": node_name, "value": str(outcome), "class": category, "index": index}
+                    {"node": node_name, "value": outcome_value, "class": category, "index": index}
                 )
 
         activated = [item for item in outcomes if item["class"] == "activated"]
@@ -163,6 +179,14 @@ def analyze_run_traces(payload: dict[str, Any]) -> dict[str, Any]:
                 run_id=run.get("runId"),
                 classes=sorted(terminal_classes),
                 outcomes=outcomes,
+            )
+        if not outcomes:
+            add(
+                findings,
+                "MEDIUM",
+                "terminal_outcome_unknown",
+                run_id=run.get("runId"),
+                consequence="run evidence cannot prove terminal outcome coverage",
             )
         run_summaries.append(
             {

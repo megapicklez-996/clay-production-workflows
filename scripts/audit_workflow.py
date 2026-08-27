@@ -116,7 +116,14 @@ def audit(evidence_dir: Path) -> dict[str, Any]:
             "trigger_overlap", "the workflow is not driven by a Clay Audience segment"
         )
     )
-    run_trace_audit = analyze_run_traces(run_traces) if run_traces else {
+    contract_outcomes = {
+        str(item)
+        for item in ((manifest.get("workflow_contract") or {}).get("terminal_outcomes") or [])
+        if item
+    }
+    run_trace_audit = analyze_run_traces(
+        run_traces, contract_outcomes if manifest else None
+    ) if run_traces else {
         "valid": True,
         "run_count": 0,
         "traced_node_count": 0,
@@ -132,11 +139,6 @@ def audit(evidence_dir: Path) -> dict[str, Any]:
             outcome_counts={},
         )
     elif receipts:
-        contract_outcomes = {
-            str(item)
-            for item in ((manifest.get("workflow_contract") or {}).get("terminal_outcomes") or [])
-            if item
-        }
         success_outcome = (manifest.get("reconciliation") or {}).get("success_outcome")
         reconciliation = analyze_reconciliation(
             receipts,

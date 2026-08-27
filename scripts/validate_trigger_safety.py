@@ -73,6 +73,15 @@ def analyze_trigger_safety(
         left_summary = summaries.get(left_segment) or {}
         right_summary = summaries.get(right_segment) or {}
         if not left_summary or not right_summary:
+            add(
+                findings,
+                severity,
+                "trigger_cohort_overlap_unresolved",
+                left_segment_id=left_segment,
+                right_segment_id=right_segment,
+                consequence="redacted segment evidence is insufficient to prove disjointness",
+                **common,
+            )
             continue
         if left_summary.get("entity_type") != right_summary.get("entity_type"):
             continue
@@ -95,6 +104,20 @@ def analyze_trigger_safety(
                 overlapping_identity_count=len(overlap),
                 identical_filter=same_filter,
                 activation_state_proven=left_state != "unknown" and right_state != "unknown",
+                **common,
+            )
+        else:
+            add(
+                findings,
+                severity,
+                "trigger_cohort_overlap_unresolved",
+                left_segment_id=left_segment,
+                right_segment_id=right_segment,
+                left_name=left_summary.get("name"),
+                right_name=right_summary.get("name"),
+                overlapping_identity_count=0,
+                identical_filter=False,
+                consequence="distinct filters do not prove disjointness",
                 **common,
             )
 

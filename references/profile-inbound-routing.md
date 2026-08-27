@@ -20,4 +20,3 @@ other inbound lead and assigns it to an owner, queue, CRM state, or follow-up pa
 
 Do not require outbound copy, suppression, or sequencer enrollment unless those
 capabilities are also present.
-

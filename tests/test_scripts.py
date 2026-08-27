@@ -353,6 +353,23 @@ class TriggerSafetyTests(unittest.TestCase):
         self.assertEqual(finding["overlapping_identity_count"], 1)
         self.assertFalse(finding["activation_state_proven"])
 
+    def test_distinct_audience_filters_without_overlap_proof_are_unresolved(self):
+        result = analyze_trigger_safety(
+            {"data": [
+                {"id": "trigger_a", "segmentId": "segment_a", "status": "active"},
+                {"id": "trigger_b", "segmentId": "segment_b", "status": "active"},
+            ]},
+            {"data": [
+                {"segment_id": "segment_a", "entity_type": "companies", "filter_sha256": "sha256:a"},
+                {"segment_id": "segment_b", "entity_type": "companies", "filter_sha256": "sha256:b"},
+            ]},
+        )
+        self.assertFalse(result["valid"])
+        self.assertIn(
+            "trigger_cohort_overlap_unresolved",
+            {item["code"] for item in result["findings"]},
+        )
+
 
 class RunTraceTests(unittest.TestCase):
     def test_detects_activation_downgrade_and_contradictory_terminal(self):
@@ -396,6 +413,23 @@ class RunTraceTests(unittest.TestCase):
             "multiple_incompatible_outcome_classes_in_run",
             {item["code"] for item in result["findings"]},
         )
+
+    def test_missing_terminal_outcome_is_unknown(self):
+        result = analyze_run_traces({"data": [{"runId": "run_missing", "nodes": [
+            {"name": "Enrichment", "fields": {"enrichment_verified": True}},
+        ]}]})
+        self.assertTrue(result["valid"])
+        self.assertIn("terminal_outcome_unknown", {item["code"] for item in result["findings"]})
+
+    def test_observed_outcome_must_be_declared(self):
+        result = analyze_run_traces(
+            {"data": [{"runId": "run_undeclared", "nodes": [
+                {"name": "Final", "fields": {"terminal_outcome": "activated_verified"}},
+            ]}]},
+            {"failed"},
+        )
+        self.assertFalse(result["valid"])
+        self.assertIn("terminal_outcome_not_declared", {item["code"] for item in result["findings"]})
 
 
 class CollectorRedactionTests(unittest.TestCase):
@@ -615,6 +649,36 @@ class AuditTests(unittest.TestCase):
             self.assertEqual(result["coverage"]["semantic_contract"], "NOT_APPLICABLE")
             self.assertEqual(result["coverage"]["trigger_safety"], "NOT_APPLICABLE")
             self.assertEqual(result["coverage"]["destination_reconciliation"], "NOT_APPLICABLE")
+
+    def test_enrichment_trace_without_terminal_outcome_cannot_reach_live(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            manifest = fixture("valid-enrichment-manifest.json")
+            manifest["workflow_contract"].update({"state": "LIVE_READY", "ready": True})
+            manifest["approvals"].update({
+                "paid_work": True, "publish": True,
+                "config_hash": configuration_hash(manifest),
+                "reference": "APPROVAL-ENRICH-UNKNOWN", "approver": "revenue-operations",
+                "approved_at": "2025-01-01T00:00:00Z", "expires_at": "2099-01-01T00:00:00Z",
+            })
+            write_evidence(
+                directory, graph=fixture("enrichment-only-workflow.json"), manifest=manifest,
+                runs={"data": [{"status": "completed"}]},
+                run_traces={"data": [{"runId": "wfr_unknown", "nodes": [{
+                    "name": "Finalize", "fields": {"enrichment_verified": True},
+                }]}]},
+            )
+            result = audit(directory)
+            self.assertNotEqual(result["readiness_ceiling"], "LIVE_READY")
+            self.assertEqual(result["coverage"]["run_outcome_consistency"], "UNKNOWN")
+
+    def test_reconciliation_success_outcome_must_be_declared(self):
+        manifest = fixture("valid-campaign-manifest.json")
+        manifest["reconciliation"]["success_outcome"] = "activated_verified"
+        manifest["workflow_contract"]["terminal_outcomes"] = ["failed"]
+        result = analyze_manifest(manifest)
+        self.assertFalse(result["valid"])
+        self.assertIn("reconciliation_success_outcome_not_declared", {item["code"] for item in result["findings"]})
 
     def test_non_mutating_enrichment_can_reach_live_without_destination_receipts(self):
         with tempfile.TemporaryDirectory() as raw:

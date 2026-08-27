@@ -20,4 +20,3 @@ leads, deals, campaign membership, ownership, or other CRM state.
 
 Provider-specific Salesforce or HubSpot fields belong in the workflow manifest or
 payload contract, not in the universal skill kernel.
-

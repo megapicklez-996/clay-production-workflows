@@ -65,4 +65,3 @@ or trigger-cutover requirements.
 
 Only `FAILED` blocks because of a demonstrated defect. `UNKNOWN` and `NOT_CHECKED`
 limit the readiness ceiling because proof is missing. `NOT_APPLICABLE` does neither.
-

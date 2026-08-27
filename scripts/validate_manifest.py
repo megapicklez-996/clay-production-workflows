@@ -241,6 +241,16 @@ def analyze_manifest(
     )
     if invalid_outcomes:
         add(findings, "BLOCKER", "terminal_outcome_names_invalid", observed=invalid_outcomes)
+    if "external_mutation" in capabilities:
+        success_outcome = (manifest.get("reconciliation") or {}).get("success_outcome")
+        if success_outcome and success_outcome not in valid_outcome_names:
+            add(
+                findings,
+                "BLOCKER",
+                "reconciliation_success_outcome_not_declared",
+                observed=success_outcome,
+                declared_outcomes=valid_outcome_names,
+            )
     monotonic_value = workflow_contract.get("monotonic_evidence_fields")
     monotonic_fields = monotonic_value if isinstance(monotonic_value, list) else []
     unsafe_monotonic_fields = sorted(

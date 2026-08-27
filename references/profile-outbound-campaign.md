@@ -21,4 +21,3 @@ or enrolls people into a sequencer.
 
 Do not apply sequence, suppression, or activation requirements to workflows that do
 not generate outreach or enroll a sequencer.
-
