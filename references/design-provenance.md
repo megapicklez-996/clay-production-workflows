@@ -9,6 +9,10 @@ Maintainer-only source record. Do not load for ordinary workflow work.
 - One finished production workflow and its reusable template, inspected read-only.
 - Observed failures including provider HTML/non-JSON responses and sequencer
   blocklist rejection.
+- A production audit that exposed a unified-trigger cutover regression, circular
+  approval binding, context loss after a destination write, contradictory terminal
+  outcomes, label-based write/readback false positives, and a mutable custom
+  function outside the workflow snapshot.
 
 No raw transcripts, live workflow identifiers, credentials, private lead values,
 customer names, or message bodies are bundled.

@@ -51,6 +51,9 @@
     "approved_total_clay_credits": 2,
     "approved_byoa_cost_usd": 1
   },
+  "dependencies": {
+    "custom_functions": []
+  },
   "approvals": {
     "config_hash": "",
     "reference": "",

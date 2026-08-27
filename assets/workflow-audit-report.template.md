@@ -10,6 +10,20 @@
 - Readiness verdict:
 - Readiness ceiling:
 
+## Evidence coverage
+
+| Control | PROVEN / FAILED / NOT_CHECKED / UNKNOWN | Evidence |
+|---|---|---|
+
+## Raw snapshot and trigger safety
+
+- Transition registry / edge-handle agreement:
+- Initial-node incoming-edge safety:
+- Context pinned after tool nodes:
+- Active trigger generation:
+- Redacted cohort overlap:
+- Custom-function fingerprint binding:
+
 ## Workflow shape
 
 - Triggers:
@@ -32,6 +46,9 @@
 
 | Cohort | Graph tested | Permitted actions | Outcome | Readbacks |
 |---|---|---|---|---|
+
+- Outcome-trace consistency:
+- Proven side effects later downgraded:
 
 ## Cost and approval
 

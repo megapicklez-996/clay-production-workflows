@@ -9,13 +9,17 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from audit_workflow import audit
+from analyze_run_traces import analyze_run_traces
+from collect_workflow_evidence import audience_summary, compact_run_trace, function_fingerprint
 from explain_workflow import build_model, render_markdown
 from summarize_runs import classify_error, summarize
 from validate_contract import analyze
 from check_evidence_compat import analyze_evidence
-from validate_graph_controls import analyze_graph_controls
+from validate_graph_controls import analyze_graph_controls, is_readback, is_write
 from validate_manifest import analyze_manifest, configuration_hash
 from validate_reconciliation import analyze_reconciliation
+from validate_snapshot_semantics import analyze_snapshot
+from validate_trigger_safety import analyze_trigger_safety
 
 
 def fixture(name):
@@ -124,6 +128,205 @@ class GraphControlTests(unittest.TestCase):
         self.assertIn("leaf_without_terminal_outcome", codes)
         self.assertIn("idempotency_control_not_detected", codes)
 
+    def test_node_classification_uses_own_executable_behavior(self):
+        router = {
+            "id": "router",
+            "name": "Stage Person Available?",
+            "description": "Routes to [EXTERNAL MUTATION] Stage Person",
+            "nodeType": "conditional",
+            "code": "context.transition_to('[EXTERNAL MUTATION] Stage Person', 'yes')",
+        }
+        function = {
+            "id": "function",
+            "name": "[EXTERNAL MUTATION FUNCTION] Create/Update Contact",
+            "nodeType": "tool",
+            "tools": [{"toolType": "clay_function", "tableId": "t_fixture"}],
+        }
+        response_parser = {
+            "id": "parser",
+            "name": "Audience Reconciliation Receipt",
+            "nodeType": "code",
+            "code": "return {'verified': bool(context.get('result'))}",
+        }
+        self.assertFalse(is_write(router))
+        self.assertTrue(is_write(function))
+        self.assertFalse(is_readback(response_parser))
+
+        paid_read_function = {
+            "id": "paid_read",
+            "name": "[PAID FUNCTION] Company Qualification",
+            "description": "Uses Salesforce lookup and enrichment. No Salesforce write.",
+            "nodeType": "tool",
+            "tools": [{"toolType": "clay_function", "tableId": "t_read_fixture"}],
+        }
+        self.assertFalse(is_write(paid_read_function))
+
+    def test_circular_approval_binding_is_a_blocker(self):
+        graph = {
+            "summary": {"nodeCount": 1, "edges": []},
+            "nodes": [{
+                "id": "preflight",
+                "name": "Campaign Preflight",
+                "nodeType": "code",
+                "code": "config_hash = 'current'\napprovals = {}\napprovals['approved_config_hash'] = config_hash",
+            }],
+        }
+        result = analyze_graph_controls(graph)
+        self.assertIn(
+            "approval_evidence_derived_from_current_configuration",
+            {item["code"] for item in result["findings"]},
+        )
+
+        graph["nodes"][0]["code"] = "current_config_hash = 'current'\napproved_config_hash = current_config_hash"
+        direct_result = analyze_graph_controls(graph)
+        self.assertIn(
+            "approval_evidence_derived_from_current_configuration",
+            {item["code"] for item in direct_result["findings"]},
+        )
+
+    def test_custom_function_fingerprint_must_match_manifest(self):
+        graph = {
+            "summary": {"nodeCount": 1, "edges": []},
+            "nodes": [{
+                "id": "function",
+                "name": "Qualification Function",
+                "description": "Read-only qualification helper.",
+                "nodeType": "tool",
+                "tools": [{"toolType": "clay_function", "tableId": "t_fixture"}],
+            }],
+        }
+        manifest = copy.deepcopy(fixture("valid-campaign-manifest.json"))
+        manifest["dependencies"]["custom_functions"] = [{
+            "id": "t_fixture",
+            "sha256": "sha256:" + "a" * 64,
+        }]
+        fingerprints = {"data": [{
+            "id": "t_fixture",
+            "sha256": "sha256:" + "b" * 64,
+            "paid_action_keys": [],
+        }]}
+        result = analyze_graph_controls(graph, manifest, fingerprints)
+        self.assertIn(
+            "custom_function_fingerprint_mismatch",
+            {item["code"] for item in result["findings"]},
+        )
+
+    def test_generic_lookup_does_not_satisfy_crm_readback(self):
+        graph = {
+            "summary": {"nodeCount": 2, "edges": [{"source": "write", "target": "lookup"}]},
+            "nodes": [
+                {
+                    "id": "write",
+                    "name": "[EXTERNAL MUTATION] Salesforce Contact Update",
+                    "nodeType": "tool",
+                    "tools": [{"actionKey": "salesforce-update-record"}],
+                },
+                {
+                    "id": "lookup",
+                    "name": "[READ ONLY] Generic Lookup",
+                    "nodeType": "tool",
+                    "tools": [{"actionKey": "generic-lookup"}],
+                },
+            ],
+        }
+        result = analyze_graph_controls(graph)
+        self.assertIn(
+            "external_write_without_downstream_readback",
+            {item["code"] for item in result["findings"]},
+        )
+
+
+class SnapshotSemanticTests(unittest.TestCase):
+    def test_valid_transition_registry_and_entrypoint(self):
+        result = analyze_snapshot(fixture("valid-runtime-snapshot.json"))
+        self.assertTrue(result["valid"], result["findings"])
+
+    def test_detects_unregistered_transition_initial_incoming_and_context_loss(self):
+        result = analyze_snapshot(fixture("unsafe-runtime-snapshot.json"))
+        codes = {item["code"] for item in result["findings"]}
+        self.assertFalse(result["valid"])
+        self.assertIn("conditional_transition_not_registered", codes)
+        self.assertIn("initial_node_has_non_trigger_incoming_edge", codes)
+        self.assertIn("context_snapshot_not_pinned_after_tool", codes)
+        self.assertIn("singular_plural_identifier_contract_drift", codes)
+
+
+class TriggerSafetyTests(unittest.TestCase):
+    def test_overlapping_unknown_trigger_generations_block_readiness(self):
+        payload = fixture("overlapping-trigger-segments.json")
+        result = analyze_trigger_safety(payload["triggers"], payload["audience_segments"])
+        self.assertFalse(result["valid"])
+        finding = next(item for item in result["findings"] if item["code"] == "trigger_cohorts_overlap")
+        self.assertEqual(finding["overlapping_identity_count"], 1)
+        self.assertFalse(finding["activation_state_proven"])
+
+
+class RunTraceTests(unittest.TestCase):
+    def test_detects_activation_downgrade_and_contradictory_terminal(self):
+        result = analyze_run_traces(fixture("contradictory-run-trace.json"))
+        codes = {item["code"] for item in result["findings"]}
+        self.assertFalse(result["valid"])
+        self.assertIn("proven_side_effect_downgraded_later_in_run", codes)
+        self.assertIn("activated_outcome_reclassified_as_pre_activation_stop", codes)
+
+    def test_consistent_activation_trace_passes(self):
+        result = analyze_run_traces(fixture("valid-run-trace.json"))
+        self.assertTrue(result["valid"], result["findings"])
+
+    def test_metadata_only_trace_is_unknown(self):
+        result = analyze_run_traces({"data": [{"runId": "run_1", "nodes": []}]})
+        self.assertTrue(result["valid"])
+        self.assertEqual(result["traced_node_count"], 0)
+        self.assertIn(
+            "run_trace_outcomes_unknown",
+            {item["code"] for item in result["findings"]},
+        )
+
+    def test_empty_trace_bundle_is_unknown(self):
+        result = analyze_run_traces({"data": []})
+        self.assertEqual(result["run_count"], 0)
+        self.assertIn(
+            "run_trace_outcomes_unknown",
+            {item["code"] for item in result["findings"]},
+        )
+
+
+class CollectorRedactionTests(unittest.TestCase):
+    def test_audience_and_function_summaries_hash_sensitive_values(self):
+        audience = {
+            "id": "seg_fixture",
+            "name": "Fixture",
+            "entityType": "companies",
+            "filter": {"operator": "Equal", "value": "private-example.com"},
+        }
+        summary = audience_summary({"id": "trigger", "segmentId": "seg_fixture"}, audience, {"count": 1})
+        self.assertNotIn("private-example.com", json.dumps(summary))
+        self.assertEqual(len(summary["identity_value_hashes"]), 1)
+
+        fingerprint = function_fingerprint(
+            "t_fixture",
+            {"name": "Function", "secret": "do-not-write", "steps": [{"actionKey": "salesforce-create-record"}]},
+        )
+        self.assertNotIn("do-not-write", json.dumps(fingerprint))
+        self.assertTrue(fingerprint["sha256"].startswith("sha256:"))
+
+    def test_compact_run_trace_allowlists_outcome_fields(self):
+        trace = compact_run_trace({
+            "runId": "wfr_fixture",
+            "nodes": [{
+                "id": "node",
+                "name": "Final",
+                "status": "completed",
+                "inputs": {"activation_executed": False, "workflow_outcome": "STALE_INPUT"},
+                "output": {"email": "private@example.com", "body1": "private copy", "activation_executed": True},
+            }],
+        })
+        rendered = json.dumps(trace)
+        self.assertNotIn("private@example.com", rendered)
+        self.assertNotIn("private copy", rendered)
+        self.assertTrue(trace["nodes"][0]["fields"]["activation_executed"])
+        self.assertNotIn("workflow_outcome", trace["nodes"][0]["fields"])
+
 
 class RunSummaryTests(unittest.TestCase):
     def test_completed_does_not_become_activation_rate(self):
@@ -136,6 +339,22 @@ class RunSummaryTests(unittest.TestCase):
         category, action = classify_error("Lead is in blocklist")
         self.assertEqual(category, "destination_rejection")
         self.assertIn("do_not_bypass", action)
+
+    def test_runtime_errors_are_classified_and_node_names_are_resolved(self):
+        failed = {
+            "data": [{
+                "runId": "wfr_fixture",
+                "failed_nodes": [
+                    {"nodeId": "hash", "name": None, "errors": ["NameError: name '_sha256' is not defined"]},
+                    {"nodeId": "date", "name": None, "errors": ["ModuleNotFoundError: No module named datetime"]},
+                ],
+            }]
+        }
+        graph = {"nodes": [{"id": "hash", "name": "Build Hash"}, {"id": "date", "name": "Parse Date"}]}
+        result = summarize({"data": []}, failed, graph)
+        self.assertEqual(result["failures"][0]["node_name"], "Build Hash")
+        self.assertEqual(result["failure_category_counts"]["runtime_undefined_name"], 1)
+        self.assertEqual(result["failure_category_counts"]["runtime_dependency_failure"], 1)
 
 
 class ReconciliationTests(unittest.TestCase):
@@ -178,17 +397,25 @@ class ReconciliationTests(unittest.TestCase):
         self.assertIn("readback_destination_mismatch", codes)
 
 
-def write_evidence(directory, *, graph=None, manifest=None, receipts=None, runs=None):
+def write_evidence(directory, *, graph=None, manifest=None, receipts=None, runs=None, run_traces=None):
     values = {
-        "collector-metadata.json": {"evidence_contract_version": 1, "clay_cli_version": "fixture"},
+        "collector-metadata.json": {
+            "evidence_contract_version": 2,
+            "clay_cli_version": "fixture",
+            "redaction_receipt": {"raw_sensitive_values_written": False},
+        },
         "identity.json": {"workspace": {"id": "ws_fixture"}, "user": {"id": "user_fixture"}},
         "workflow.json": {"id": "wf_fixture_governed", "name": "Governed Fixture"},
         "graph.json": graph or fixture("valid-governed-graph.json"),
         "validation.json": {"valid": True, "errors": [], "warnings": []},
         "snapshots.json": {"data": []},
+        "current-snapshot.json": fixture("valid-runtime-snapshot.json"),
         "triggers.json": {"data": []},
+        "audience-segments.json": {"data": []},
+        "function-fingerprints.json": {"data": []},
         "runs.json": runs or {"data": []},
         "failed-runs.json": {"data": []},
+        "run-traces.json": run_traces or {"data": []},
     }
     if manifest is not None:
         values["manifest.json"] = manifest
@@ -214,6 +441,18 @@ class EvidenceCompatibilityTests(unittest.TestCase):
             result = analyze_evidence(directory)
             self.assertFalse(result["compatible"])
             self.assertIn("graph_shape_changed", {item["code"] for item in result["findings"]})
+
+    def test_empty_current_snapshot_blocks_v2_compatibility(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            write_evidence(directory)
+            (directory / "current-snapshot.json").write_text("{}", encoding="utf-8")
+            result = analyze_evidence(directory)
+            self.assertFalse(result["compatible"])
+            self.assertIn(
+                "current_snapshot_shape_changed",
+                {item["code"] for item in result["findings"]},
+            )
 
 
 class AuditTests(unittest.TestCase):
@@ -246,6 +485,7 @@ class AuditTests(unittest.TestCase):
                 manifest=manifest,
                 receipts=receipts,
                 runs={"data": [{"status": "completed"}]},
+                run_traces=fixture("valid-run-trace.json"),
             )
             result = audit(directory)
             self.assertEqual(result["readiness_ceiling"], "LIVE_READY", result)

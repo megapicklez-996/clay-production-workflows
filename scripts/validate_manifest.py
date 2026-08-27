@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -101,7 +102,7 @@ def analyze_manifest(
     required_sections = (
         "template", "campaign", "sources", "eligibility", "copy_contract",
         "payload_contract", "destinations", "budgets", "approvals",
-        "ownership", "operations", "data_handling", "reconciliation",
+        "ownership", "operations", "data_handling", "reconciliation", "dependencies",
     )
     for section in required_sections:
         if not isinstance(manifest.get(section), dict):
@@ -120,6 +121,7 @@ def analyze_manifest(
     budgets = manifest.get("budgets") or {}
     copy_contract = manifest.get("copy_contract") or {}
     payload_contract = manifest.get("payload_contract") or {}
+    dependencies = manifest.get("dependencies") or {}
 
     state = campaign.get("state")
     if state not in {"DRAFT", "PREVIEW_READY", "CANARY_READY", "LIVE_READY"}:
@@ -164,6 +166,29 @@ def analyze_manifest(
         value = budgets.get(key)
         if not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
             add(findings, "BLOCKER", "budget_invalid", field=key, observed=value)
+
+    custom_functions = dependencies.get("custom_functions")
+    if not isinstance(custom_functions, list):
+        add(findings, "BLOCKER", "custom_function_dependencies_invalid")
+    else:
+        seen_function_ids: set[str] = set()
+        for index, row in enumerate(custom_functions):
+            if not isinstance(row, dict) or not row.get("id"):
+                add(findings, "BLOCKER", "custom_function_dependency_invalid", index=index)
+                continue
+            function_id = str(row["id"])
+            if function_id in seen_function_ids:
+                add(findings, "BLOCKER", "custom_function_dependency_duplicated", function_id=function_id)
+            seen_function_ids.add(function_id)
+            digest = str(row.get("sha256") or "")
+            if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                add(
+                    findings,
+                    "BLOCKER",
+                    "custom_function_dependency_hash_invalid",
+                    function_id=function_id,
+                    observed=digest,
+                )
 
     enabled_approvals = [key for key in APPROVAL_KEYS if approvals.get(key) is True]
     missing_approval_flags = [key for key in APPROVAL_KEYS if key not in approvals]

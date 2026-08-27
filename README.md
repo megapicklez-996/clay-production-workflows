@@ -153,12 +153,18 @@ Depending on the request, the agent should produce one or more of these artifact
 - A deterministic manifest hash and approval-drift report.
 - A graph-control report covering destination payloads, idempotency, suppression,
   terminal outcomes, and downstream readbacks.
+- A raw-snapshot semantic report covering transition registries, edge handles,
+  entrypoint wiring, and pinned context after tool nodes.
+- A redacted trigger-overlap report and custom-function fingerprint binding.
+- A run-trace consistency report that catches verified side effects later reported
+  as false or reclassified as pre-activation stops.
 - A reconciliation audit for duplicate activation and ambiguous partial writes.
 - An evidence-compatibility verdict tied to the collector contract and Clay CLI version.
 
 `LIVE_READY` has a deliberately high bar. It requires a real canary that reached
-every intended destination and was independently read back. Static graph inspection
-cannot prove it.
+every intended destination and was independently read back, a consistent produced-
+output trace, and proven raw-snapshot and trigger-safety coverage. Static graph
+inspection cannot prove it.
 
 ## Audit a live workflow
 
@@ -178,12 +184,15 @@ Collect a read-only evidence bundle:
 python3 scripts/collect_workflow_evidence.py WORKFLOW_ID \
   --output .clay-evidence/WORKFLOW_ID \
   --manifest campaign-manifest.json \
-  --receipts reconciliation-receipts.json
+  --receipts reconciliation-receipts.json \
+  --trace-run BOUNDED_CANARY_RUN_ID
 ```
 
-The collector reads workflow metadata, graph, validation, diagram, snapshots,
-triggers, and recent run metadata. It does not publish, test, resume, or mutate the
-workflow.
+The collector reads workflow metadata, graph, validation, diagram, the current raw
+snapshot, triggers, recent run metadata, Audience filters, and referenced custom
+functions. Audience identity values and function definitions are hashed before
+writing; optional run traces retain only safety/status fields. It does not publish,
+test, resume, or mutate the workflow.
 
 Run the audit:
 
@@ -196,7 +205,18 @@ python3 scripts/validate_manifest.py \
 
 python3 scripts/validate_graph_controls.py \
   .clay-evidence/WORKFLOW_ID/graph.json \
-  --manifest .clay-evidence/WORKFLOW_ID/manifest.json
+  --manifest .clay-evidence/WORKFLOW_ID/manifest.json \
+  --function-fingerprints .clay-evidence/WORKFLOW_ID/function-fingerprints.json
+
+python3 scripts/validate_snapshot_semantics.py \
+  .clay-evidence/WORKFLOW_ID/current-snapshot.json
+
+python3 scripts/validate_trigger_safety.py \
+  .clay-evidence/WORKFLOW_ID/triggers.json \
+  --audience-segments .clay-evidence/WORKFLOW_ID/audience-segments.json
+
+python3 scripts/analyze_run_traces.py \
+  .clay-evidence/WORKFLOW_ID/run-traces.json
 
 python3 scripts/check_evidence_compat.py .clay-evidence/WORKFLOW_ID
 
@@ -205,7 +225,8 @@ python3 scripts/validate_reconciliation.py \
   --manifest .clay-evidence/WORKFLOW_ID/manifest.json
 
 python3 scripts/summarize_runs.py .clay-evidence/WORKFLOW_ID/runs.json \
-  --failed-runs .clay-evidence/WORKFLOW_ID/failed-runs.json
+  --failed-runs .clay-evidence/WORKFLOW_ID/failed-runs.json \
+  --graph .clay-evidence/WORKFLOW_ID/graph.json
 
 python3 scripts/audit_workflow.py .clay-evidence/WORKFLOW_ID
 ```
@@ -235,6 +256,12 @@ python3 scripts/validate_manifest.py \
 python3 scripts/validate_graph_controls.py \
   evals/fixtures/valid-governed-graph.json \
   --manifest evals/fixtures/valid-campaign-manifest.json
+
+python3 scripts/validate_snapshot_semantics.py \
+  evals/fixtures/valid-runtime-snapshot.json
+
+python3 scripts/analyze_run_traces.py \
+  evals/fixtures/valid-run-trace.json
 
 python3 scripts/validate_reconciliation.py \
   evals/fixtures/valid-reconciliation-receipts.json

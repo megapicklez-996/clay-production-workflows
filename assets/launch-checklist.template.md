@@ -7,12 +7,16 @@
 - [ ] Approval is scoped, unexpired, and names an owner.
 - [ ] Source and destination IDs were verified read-only.
 - [ ] Trigger entity types and segment counts are correct.
+- [ ] Only one intended trigger generation is active; old and new cohorts do not overlap unexpectedly.
+- [ ] Every custom Clay function fingerprint matches the approved manifest.
 
 ## Contract
 
 - [ ] Generator, repair, validator, QA, payload, and receipt agree on sequence length.
 - [ ] All required destination fields are present on every eligible branch.
 - [ ] Tool input mappings and result paths were read back after save.
+- [ ] Conditional calls, transition registries, targets, and edge handles agree.
+- [ ] Context required after a tool node is supplied through explicit input references.
 - [ ] Required fields are checked at the final payload boundary.
 
 ## Safety
@@ -31,6 +35,8 @@
 - [ ] Audience, CRM, campaign membership, and sequencer readbacks passed.
 - [ ] Duplicate rerun did not duplicate or re-enroll the record.
 - [ ] Terminal outcome distribution is reported without treating `completed` as success.
+- [ ] No later node downgrades a verified write or activation to false.
+- [ ] No run contains incompatible terminal outcome classes.
 
 ## Release
 

@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+"""Detect contradictory terminal and side-effect states in compact run traces."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+
+MONOTONIC_TRUE_FIELDS = (
+    "activation_executed",
+    "external_send_executed",
+    "instantly_write_executed",
+    "instantly_campaign_enrollment_executed",
+    "instantly_campaign_membership_verified",
+    "salesforce_write_executed",
+    "salesforce_contact_write_executed",
+    "salesforce_account_write_executed",
+    "salesforce_campaign_member_write_executed",
+    "salesforce_primary_campaign_member_verified",
+    "salesforce_secondary_campaign_member_verified",
+    "salesforce_readback_pass",
+    "salesforce_readback_completed",
+    "salesforce_readback_identity_match",
+    "salesforce_readback_patch_match",
+    "audience_person_upsert_executed",
+    "audience_activation_marker_write_executed",
+    "audience_company_salesforce_id_sync_executed",
+    "audience_person_salesforce_id_sync_executed",
+)
+
+
+def load_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Unable to read JSON from {path}: {exc}") from exc
+
+
+def add(findings: list[dict[str, Any]], severity: str, code: str, **detail: Any) -> None:
+    findings.append({"severity": severity, "code": code, **detail})
+
+
+def outcome_class(value: Any) -> str | None:
+    text = str(value or "").strip().lower()
+    if not text:
+        return None
+    if "activated" in text or "enrollment_verified" in text:
+        return "activated"
+    if "already" in text and "satisfied" in text:
+        return "already_satisfied"
+    if "suppress" in text or "no_send" in text:
+        return "safely_suppressed"
+    if "stopped_before" in text or text.startswith("stop"):
+        return "stopped"
+    if "review" in text:
+        return "review"
+    if "provider" in text or "destination" in text or "reconciliation" in text:
+        return "failure"
+    return "other"
+
+
+def node_fields(node: dict[str, Any]) -> dict[str, Any]:
+    for key in ("fields", "output", "result"):
+        value = node.get(key)
+        if isinstance(value, dict):
+            return value
+    return {}
+
+
+def analyze_run_traces(payload: dict[str, Any]) -> dict[str, Any]:
+    runs = [run for run in payload.get("data") or [] if isinstance(run, dict)]
+    findings: list[dict[str, Any]] = []
+    run_summaries: list[dict[str, Any]] = []
+    traced_node_count = 0
+    for run in runs:
+        seen_true: dict[str, str] = {}
+        outcomes: list[dict[str, Any]] = []
+        nodes = run.get("nodes") or []
+        traced_node_count += len(nodes)
+        for index, node in enumerate(nodes):
+            if not isinstance(node, dict):
+                continue
+            fields = node_fields(node)
+            node_name = str(node.get("name") or node.get("nodeId") or index)
+            for field in MONOTONIC_TRUE_FIELDS:
+                if fields.get(field) is True:
+                    seen_true.setdefault(field, node_name)
+                elif fields.get(field) is False and field in seen_true:
+                    add(
+                        findings,
+                        "BLOCKER",
+                        "proven_side_effect_downgraded_later_in_run",
+                        run_id=run.get("runId"),
+                        field=field,
+                        proven_at=seen_true[field],
+                        downgraded_at=node_name,
+                    )
+            outcome = fields.get("workflow_outcome") or fields.get("terminal_outcome")
+            category = outcome_class(outcome)
+            if category:
+                outcomes.append(
+                    {"node": node_name, "value": str(outcome), "class": category, "index": index}
+                )
+
+        activated = [item for item in outcomes if item["class"] == "activated"]
+        stopped = [item for item in outcomes if item["class"] == "stopped"]
+        if activated and stopped and max(item["index"] for item in stopped) > min(item["index"] for item in activated):
+            add(
+                findings,
+                "BLOCKER",
+                "activated_outcome_reclassified_as_pre_activation_stop",
+                run_id=run.get("runId"),
+                activated=activated,
+                stopped=stopped,
+            )
+        terminal_classes = {
+            item["class"] for item in outcomes
+            if item["class"] in {"activated", "already_satisfied", "review", "safely_suppressed", "stopped"}
+        }
+        if len(terminal_classes) > 1:
+            add(
+                findings,
+                "HIGH",
+                "multiple_incompatible_outcome_classes_in_run",
+                run_id=run.get("runId"),
+                classes=sorted(terminal_classes),
+                outcomes=outcomes,
+            )
+        run_summaries.append(
+            {
+                "run_id": run.get("runId"),
+                "node_count": len(run.get("nodes") or []),
+                "outcomes": outcomes,
+                "proven_true_fields": sorted(seen_true),
+            }
+        )
+
+    if not runs:
+        add(
+            findings,
+            "MEDIUM",
+            "run_trace_outcomes_unknown",
+            consequence="no_redacted_run_trace_was_collected",
+        )
+    elif traced_node_count == 0:
+        add(
+            findings,
+            "MEDIUM",
+            "run_trace_outcomes_unknown",
+            consequence="run_metadata_exists_but_no_node_outputs_were_collected",
+        )
+
+    blockers = sum(item["severity"] == "BLOCKER" for item in findings)
+    high = sum(item["severity"] == "HIGH" for item in findings)
+    return {
+        "valid": blockers == 0 and high == 0,
+        "run_count": len(runs),
+        "traced_node_count": traced_node_count,
+        "runs": run_summaries,
+        "findings": findings,
+        "summary": {
+            "blockers": blockers,
+            "high": high,
+            "warnings": len(findings) - blockers - high,
+        },
+    }
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Audit compact Clay run outcome traces.")
+    parser.add_argument("run_traces", type=Path)
+    parser.add_argument("--strict", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        payload = load_json(args.run_traces)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    result = analyze_run_traces(payload)
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 10 if args.strict and not result["valid"] else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

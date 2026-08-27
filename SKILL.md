@@ -1,9 +1,11 @@
 ---
 name: clay-production-workflows
 description: Build, migrate, explain, visualize, audit, test, and launch-gate multi-node Clay Workflows that enrich accounts or people and may write to Audiences, a CRM, or a sequencer. Use for plain-English walkthroughs and in-conversation visualizations of governed workflow diagrams, production hardening, parity migrations, reusable campaign templates, bounded canaries, semantic contract checks, cost and approval gates, payload completeness, idempotency, and downstream reconciliation. Do not use for simple table explanations, one-off enrichment questions, generic non-Clay diagrams, or read-only audience counts.
+license: MIT
+compatibility: Python 3.11+ for offline checks; authenticated Clay CLI and network access for live evidence collection.
 metadata:
   author: orchid-automation
-  version: "0.6.0"
+  version: "0.7.0"
 ---
 
 # Clay Production Workflows
@@ -79,11 +81,15 @@ human-readable name. Then prefer the bundled collector over repeated ad hoc comm
 
 ```bash
 python3 scripts/collect_workflow_evidence.py WORKFLOW_ID --output EVIDENCE_DIR \
-  --manifest campaign-manifest.json --receipts reconciliation-receipts.json
+  --manifest campaign-manifest.json --receipts reconciliation-receipts.json \
+  --trace-run BOUNDED_CANARY_RUN_ID
 ```
 
-The collector only reads workflow metadata, graph, validation, diagram, snapshots,
-triggers, and recent run metadata. It does not test, publish, resume, or mutate.
+The collector only reads workflow metadata, graph, validation, the current raw
+snapshot, triggers, redacted Audience cohort fingerprints, custom-function
+fingerprints, and recent run metadata. `--trace-run` adds an allowlisted outcome
+trace without emails, message bodies, or raw provider payloads. It does not test,
+publish, resume, or mutate.
 
 Audit the evidence:
 
@@ -92,12 +98,17 @@ python3 scripts/validate_contract.py EVIDENCE_DIR/graph.json \
   --validation EVIDENCE_DIR/validation.json
 python3 scripts/validate_manifest.py EVIDENCE_DIR/manifest.json
 python3 scripts/validate_graph_controls.py EVIDENCE_DIR/graph.json \
-  --manifest EVIDENCE_DIR/manifest.json
+  --manifest EVIDENCE_DIR/manifest.json \
+  --function-fingerprints EVIDENCE_DIR/function-fingerprints.json
+python3 scripts/validate_snapshot_semantics.py EVIDENCE_DIR/current-snapshot.json
+python3 scripts/validate_trigger_safety.py EVIDENCE_DIR/triggers.json \
+  --audience-segments EVIDENCE_DIR/audience-segments.json
+python3 scripts/analyze_run_traces.py EVIDENCE_DIR/run-traces.json
 python3 scripts/check_evidence_compat.py EVIDENCE_DIR
 python3 scripts/validate_reconciliation.py EVIDENCE_DIR/receipts.json \
   --manifest EVIDENCE_DIR/manifest.json
 python3 scripts/summarize_runs.py EVIDENCE_DIR/runs.json \
-  --failed-runs EVIDENCE_DIR/failed-runs.json
+  --failed-runs EVIDENCE_DIR/failed-runs.json --graph EVIDENCE_DIR/graph.json
 python3 scripts/audit_workflow.py EVIDENCE_DIR
 ```
 
@@ -121,7 +132,8 @@ replacing these scripts. Structured data goes to stdout; diagnostics go to stder
 Define one campaign manifest covering campaign identity, sources, eligibility,
 required fields, exact sequence length, destinations, suppression, worst-case cost,
 approval scope, payload fields by destination, terminal outcomes, accountable owners,
-kill-switch and rollback details, data handling, and reconciliation ownership.
+kill-switch and rollback details, data handling, reconciliation ownership, and the
+fingerprints of mutable custom Clay functions.
 
 Start from [campaign-manifest.template.json](assets/campaign-manifest.template.json).
 Defaults must permit no paid work and no external writes. Changing the normalized
@@ -142,6 +154,10 @@ payload preview; separately approved writes; and read-after-write reconciliation
 Use deterministic code for routing, normalization, validation, hashing, budgets,
 and identifiers. Use agents only for judgment or generation. Preserve exact values
 with typed schemas or explicit tool input mappings.
+
+Treat a write response as an attempt receipt, not a readback. A readback requires a
+separate read-only destination action after the mutation, exact identity matching,
+and equality checks for the fields the workflow claims to have written.
 
 ## Mandatory semantic audit
 
@@ -176,7 +192,9 @@ failure, destination rejection, or reconciliation failure.
 
 Use only `DRAFT_BLOCKED`, `PREVIEW_READY`, `CANARY_READY`, or `LIVE_READY`.
 `LIVE_READY` requires a real canary that reached every intended destination and was
-independently read back. Static inspection can set a ceiling but cannot prove it.
+independently read back, plus an outcome trace with no side-effect downgrade or
+contradictory terminal classification. Static inspection can set a ceiling but
+cannot prove it.
 
 Before live operation, record the exact trigger pause method, rollback snapshot,
 downstream remediation owner, permitted log fields, redactions, and retention. A

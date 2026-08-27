@@ -17,6 +17,12 @@ manifest and validator while its generation, repair, and QA agents handled only 
    destination payload requirements, write-to-readback reachability, idempotency,
    suppression, and terminal leaves. Treat unavailable mappings or edges as unknown,
    not as a pass.
+7. Run `scripts/validate_snapshot_semantics.py` against the current raw snapshot to
+   compare transition calls, configured registries, edge handles, entrypoints, and
+   pinned context after tool nodes.
+8. Run `scripts/validate_trigger_safety.py` and `scripts/analyze_run_traces.py` to
+   detect overlapping trigger generations and terminal outcomes that contradict a
+   previously proven side effect.
 
 ## Checks
 
@@ -26,9 +32,21 @@ manifest and validator while its generation, repair, and QA agents handled only 
 - Tool mappings reference persisted inputs, not invented variables.
 - Source and destination IDs match approved values.
 - Approval references match and bind to the current config hash.
+- Workflow code does not populate its own `approved_config_hash` or approval
+  reference from the current unapproved configuration.
+- Called conditional transitions, configured transition IDs and targets, and edge
+  handles agree exactly; initial adapters do not also receive routed work.
 - Retry count is bounded and preserves original context.
 - QA examines exactly what will be sent and returns verdicts, not rewritten copy.
 - Readbacks verify the same object and campaign the write targeted.
+- A code node that parses a write response is not counted as an independent
+  readback; the graph must contain a separate read-only destination action.
+- Custom Clay functions are fingerprinted, bound in the manifest, and audited for
+  hidden paid work and mutations.
+- Unified and legacy trigger cohorts do not overlap unless only one generation is
+  proven active.
+- A later node never downgrades an already verified write or activation to false or
+  reclassifies it as a pre-activation stop.
 - Node names do not describe stale behavior that conflicts with prompts or schemas.
 - Every approved destination has an inspectable write mapping containing its manifest
   payload fields and a downstream readback.
